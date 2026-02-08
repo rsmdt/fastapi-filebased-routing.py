@@ -1,0 +1,94 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fastapi-filebased-routing"
+version = "0.1.0"
+description = "Next.js-style file-based routing for FastAPI"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [
+    {name = "irudi"}
+]
+keywords = ["fastapi", "routing", "file-based", "filesystem", "nextjs"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Framework :: FastAPI",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "fastapi>=0.115.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-asyncio>=0.24",
+    "mypy>=1.10",
+    "ruff>=0.8",
+    "httpx>=0.27",
+]
+
+[project.urls]
+Homepage = "https://github.com/irudi/fastapi-filebased-routing"
+Documentation = "https://github.com/irudi/fastapi-filebased-routing#readme"
+Repository = "https://github.com/irudi/fastapi-filebased-routing"
+"Bug Tracker" = "https://github.com/irudi/fastapi-filebased-routing/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fastapi_filebased_routing"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "C90", "N", "UP", "PIE", "SIM", "TCH"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["fastapi_filebased_routing"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--tb=short",
+    "--cov=fastapi_filebased_routing",
+    "--cov-report=term-missing",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src/fastapi_filebased_routing"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+precision = 2
