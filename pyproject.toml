@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.10.0,<0.11.0"]
+build-backend = "uv_build"
 
 [project]
 name = "fastapi-filebased-routing"
@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 license = {text = "MIT"}
 authors = [
-    {name = "irudi"}
+    {name = "rsmdt"}
 ]
 keywords = ["fastapi", "routing", "file-based", "filesystem", "nextjs"]
 classifiers = [
@@ -41,13 +41,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/irudi/fastapi-filebased-routing"
-Documentation = "https://github.com/irudi/fastapi-filebased-routing#readme"
-Repository = "https://github.com/irudi/fastapi-filebased-routing"
-"Bug Tracker" = "https://github.com/irudi/fastapi-filebased-routing/issues"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/fastapi_filebased_routing"]
+Homepage = "https://github.com/rsmdt/fastapi-filebased-routing.py"
+Documentation = "https://github.com/rsmdt/fastapi-filebased-routing.py#readme"
+Repository = "https://github.com/rsmdt/fastapi-filebased-routing.py"
+"Bug Tracker" = "https://github.com/rsmdt/fastapi-filebased-routing.py/issues"
 
 [tool.mypy]
 python_version = "3.13"

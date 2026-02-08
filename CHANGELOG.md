@@ -56,6 +56,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type-safe with PEP 561 marker
 - 98%+ test coverage across all modules
 
-[Unreleased]: https://github.com/irudi/fastapi-filebased-routing/compare/v0.2.0...main
-[0.2.0]: https://github.com/irudi/fastapi-filebased-routing/releases/tag/v0.2.0
-[0.1.0]: https://github.com/irudi/fastapi-filebased-routing/releases/tag/v0.1.0
+[Unreleased]: https://github.com/rsmdt/fastapi-filebased-routing.py/compare/v0.2.0...main
+[0.2.0]: https://github.com/rsmdt/fastapi-filebased-routing.py/releases/tag/v0.2.0
+[0.1.0]: https://github.com/rsmdt/fastapi-filebased-routing.py/releases/tag/v0.1.0
