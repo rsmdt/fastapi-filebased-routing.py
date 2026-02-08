@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.13", "3.14"]
+    name: Test (Python ${{ matrix.python }})
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install Python
+        run: uv python install ${{ matrix.python }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run tests
+        run: uv run pytest --tb=short -q
+
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint & Types
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Ruff check
+        run: uv run ruff check src/ tests/
+
+      - name: Ruff format
+        run: uv run ruff format --check src/ tests/
+
+      - name: Mypy
+        run: uv run mypy src/
