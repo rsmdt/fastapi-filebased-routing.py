@@ -23,9 +23,7 @@ class TestAuthShortCircuitIsolation:
         """Fire authenticated and unauthenticated requests simultaneously."""
         transport = httpx.ASGITransport(app=app)
 
-        async with httpx.AsyncClient(
-            transport=transport, base_url="http://testserver"
-        ) as client:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             requests: list[dict[str, Any]] = []
             for i in range(CONCURRENT_REQUESTS):
                 request_id = str(uuid.uuid4())
@@ -45,10 +43,7 @@ class TestAuthShortCircuitIsolation:
                     }
                 )
 
-            tasks = [
-                client.get("/api/protected", headers=req["headers"])
-                for req in requests
-            ]
+            tasks = [client.get("/api/protected", headers=req["headers"]) for req in requests]
             responses = await asyncio.gather(*tasks)
 
         authenticated_ids: set[str] = set()
@@ -64,8 +59,7 @@ class TestAuthShortCircuitIsolation:
                 )
                 assert body["request_id"] == req["request_id"]
                 assert body["user_id"] == req["user_id"], (
-                    f"User identity leak! Expected {req['user_id']}, "
-                    f"got {body['user_id']}"
+                    f"User identity leak! Expected {req['user_id']}, got {body['user_id']}"
                 )
                 assert body["trace"] == EXPECTED_TRACES["protected"]
                 authenticated_ids.add(body["request_id"])
@@ -96,9 +90,7 @@ class TestAuthShortCircuitIsolation:
         """Every authenticated request carries a unique user — verify no swaps."""
         transport = httpx.ASGITransport(app=app)
 
-        async with httpx.AsyncClient(
-            transport=transport, base_url="http://testserver"
-        ) as client:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             users = [
                 {"request_id": str(uuid.uuid4()), "user_id": f"user-{i:04d}"}
                 for i in range(CONCURRENT_REQUESTS)
@@ -124,8 +116,7 @@ class TestAuthShortCircuitIsolation:
 
             assert body["request_id"] == user["request_id"]
             assert body["user_id"] == user["user_id"], (
-                f"Identity swap! Request for {user['user_id']} "
-                f"got response for {body['user_id']}"
+                f"Identity swap! Request for {user['user_id']} got response for {body['user_id']}"
             )
             seen_users.add(body["user_id"])
 

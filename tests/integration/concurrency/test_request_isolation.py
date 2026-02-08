@@ -18,15 +18,11 @@ from .conftest import CONCURRENT_REQUESTS, EXPECTED_TRACES
 class TestConcurrentRequestIsolation:
     """Verify request isolation under concurrent load with random delays."""
 
-    async def test_no_data_leak_across_concurrent_requests(
-        self, app: FastAPI
-    ) -> None:
+    async def test_no_data_leak_across_concurrent_requests(self, app: FastAPI) -> None:
         """Fire N concurrent requests and verify every response matches its sender."""
         transport = httpx.ASGITransport(app=app)
 
-        async with httpx.AsyncClient(
-            transport=transport, base_url="http://testserver"
-        ) as client:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             requests: list[dict[str, Any]] = []
             for i in range(CONCURRENT_REQUESTS):
                 request_id = str(uuid.uuid4())
@@ -71,8 +67,7 @@ class TestConcurrentRequestIsolation:
             body = response.json()
 
             assert body["request_id"] == req["request_id"], (
-                f"Body request_id mismatch: "
-                f"expected {req['request_id']}, got {body['request_id']}"
+                f"Body request_id mismatch: expected {req['request_id']}, got {body['request_id']}"
             )
             assert response.headers["x-request-id"] == req["request_id"], (
                 f"Header X-Request-ID mismatch: "
@@ -91,21 +86,14 @@ class TestConcurrentRequestIsolation:
 
         assert len(seen_ids) == CONCURRENT_REQUESTS
 
-    async def test_same_route_concurrent_requests_isolated(
-        self, app: FastAPI
-    ) -> None:
+    async def test_same_route_concurrent_requests_isolated(self, app: FastAPI) -> None:
         """All requests hit the SAME route — maximizes interleaving risk."""
         transport = httpx.ASGITransport(app=app)
 
-        async with httpx.AsyncClient(
-            transport=transport, base_url="http://testserver"
-        ) as client:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             request_ids = [str(uuid.uuid4()) for _ in range(CONCURRENT_REQUESTS)]
 
-            tasks = [
-                client.get("/api/users", headers={"X-Request-ID": rid})
-                for rid in request_ids
-            ]
+            tasks = [client.get("/api/users", headers={"X-Request-ID": rid}) for rid in request_ids]
             responses = await asyncio.gather(*tasks)
 
         for rid, response in zip(request_ids, responses, strict=True):
@@ -117,15 +105,11 @@ class TestConcurrentRequestIsolation:
             assert body["route"] == "users"
             assert body["trace"] == EXPECTED_TRACES["users"]
 
-    async def test_path_parameter_isolation_under_concurrency(
-        self, app: FastAPI
-    ) -> None:
+    async def test_path_parameter_isolation_under_concurrency(self, app: FastAPI) -> None:
         """Different item_ids must never bleed across responses."""
         transport = httpx.ASGITransport(app=app)
 
-        async with httpx.AsyncClient(
-            transport=transport, base_url="http://testserver"
-        ) as client:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             items = [
                 {"item_id": f"item-{i:04d}", "request_id": str(uuid.uuid4())}
                 for i in range(CONCURRENT_REQUESTS)
@@ -148,9 +132,7 @@ class TestConcurrentRequestIsolation:
             assert body["item_id"] == item["item_id"]
             assert body["trace"] == EXPECTED_TRACES["items"]
 
-    async def test_middleware_state_not_shared_between_requests(
-        self, app: FastAPI
-    ) -> None:
+    async def test_middleware_state_not_shared_between_requests(self, app: FastAPI) -> None:
         """Verify request.state.middleware_trace is never polluted by other requests.
 
         If traces leaked, we'd see traces like ["root", "api", "users-file", "root"]
@@ -158,9 +140,7 @@ class TestConcurrentRequestIsolation:
         """
         transport = httpx.ASGITransport(app=app)
 
-        async with httpx.AsyncClient(
-            transport=transport, base_url="http://testserver"
-        ) as client:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             routes = [
                 ("/echo", "echo"),
                 ("/api/users", "users"),

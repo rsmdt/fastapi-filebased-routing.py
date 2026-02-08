@@ -20,9 +20,7 @@ class TestRequestBodyIsolation:
         """Fire concurrent POST requests with unique JSON bodies."""
         transport = httpx.ASGITransport(app=app)
 
-        async with httpx.AsyncClient(
-            transport=transport, base_url="http://testserver"
-        ) as client:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             messages = [
                 {
                     "request_id": str(uuid.uuid4()),

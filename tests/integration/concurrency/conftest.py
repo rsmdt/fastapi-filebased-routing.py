@@ -40,9 +40,7 @@ EXPECTED_TRACES = {
 
 def _load_create_app() -> Callable[..., FastAPI]:
     """Import create_app from the fixture's main.py by file path."""
-    spec = importlib.util.spec_from_file_location(
-        "concurrency_app.main", FIXTURE_DIR / "main.py"
-    )
+    spec = importlib.util.spec_from_file_location("concurrency_app.main", FIXTURE_DIR / "main.py")
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
