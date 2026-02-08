@@ -113,11 +113,11 @@ def test_all_contains_existing_exports():
     assert "RouteValidationError" in fastapi_filebased_routing.__all__
 
 
-def test_version_is_0_2_0():
-    """__version__ is bumped to 0.2.0."""
+def test_version_is_1_0_0():
+    """__version__ is bumped to 1.0.0."""
     import fastapi_filebased_routing
 
-    assert fastapi_filebased_routing.__version__ == "0.2.0"
+    assert fastapi_filebased_routing.__version__ == "1.0.0"
 
 
 def test_route_import_path():
