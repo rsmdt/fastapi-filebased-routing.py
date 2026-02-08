@@ -362,3 +362,171 @@ class TestSymlinkSecurity:
         # Both the original and symlinked route should be found
         paths = {r.path for r in routes}
         assert "/routes" in paths
+
+
+class TestMiddlewareDiscovery:
+    """Test _middleware.py file discovery functionality."""
+
+    def test_discovers_middleware_in_base_directory(self, tmp_path: Path):
+        """_middleware.py in base directory is discovered with depth 0."""
+        middleware_file = tmp_path / "_middleware.py"
+        middleware_file.write_text("middleware = []")
+
+        from fastapi_filebased_routing.core.scanner import scan_middleware
+
+        files = scan_middleware(tmp_path)
+
+        assert len(files) == 1
+        assert files[0].file_path == middleware_file
+        assert files[0].directory == tmp_path
+        assert files[0].depth == 0
+
+    def test_discovers_middleware_in_nested_directories(self, tmp_path: Path):
+        """_middleware.py in nested directories discovered with correct depth."""
+        (tmp_path / "api").mkdir()
+        (tmp_path / "api" / "_middleware.py").write_text("middleware = []")
+        (tmp_path / "api" / "v1").mkdir()
+        (tmp_path / "api" / "v1" / "_middleware.py").write_text("middleware = []")
+
+        from fastapi_filebased_routing.core.scanner import scan_middleware
+
+        files = scan_middleware(tmp_path)
+
+        assert len(files) == 2
+        # Should be sorted by depth (shallowest first)
+        assert files[0].depth == 1  # api/_middleware.py
+        assert files[1].depth == 2  # api/v1/_middleware.py
+
+    def test_multiple_middleware_sorted_by_depth(self, tmp_path: Path):
+        """Multiple _middleware.py at different levels sorted by depth."""
+        # Create middleware at root, depth 1, and depth 2
+        (tmp_path / "_middleware.py").write_text("middleware = []")
+        (tmp_path / "api").mkdir()
+        (tmp_path / "api" / "_middleware.py").write_text("middleware = []")
+        (tmp_path / "api" / "v1").mkdir()
+        (tmp_path / "api" / "v1" / "_middleware.py").write_text("middleware = []")
+
+        from fastapi_filebased_routing.core.scanner import scan_middleware
+
+        files = scan_middleware(tmp_path)
+
+        assert len(files) == 3
+        assert files[0].depth == 0  # root
+        assert files[1].depth == 1  # api
+        assert files[2].depth == 2  # api/v1
+        # Verify they're in correct order
+        assert files[0].directory == tmp_path
+        assert files[1].directory == tmp_path / "api"
+        assert files[2].directory == tmp_path / "api" / "v1"
+
+    def test_skips_pycache_directories_middleware(self, tmp_path: Path):
+        """__pycache__ directories are skipped when scanning for middleware."""
+        pycache = tmp_path / "__pycache__"
+        pycache.mkdir()
+        (pycache / "_middleware.py").write_text("middleware = []")
+
+        # Create a valid middleware file
+        (tmp_path / "api").mkdir()
+        (tmp_path / "api" / "_middleware.py").write_text("middleware = []")
+
+        from fastapi_filebased_routing.core.scanner import scan_middleware
+
+        files = scan_middleware(tmp_path)
+
+        assert len(files) == 1
+        assert files[0].directory == tmp_path / "api"
+
+    def test_skips_hidden_directories_middleware(self, tmp_path: Path):
+        """Hidden directories (starting with .) are skipped."""
+        hidden = tmp_path / ".hidden"
+        hidden.mkdir()
+        (hidden / "_middleware.py").write_text("middleware = []")
+
+        # Create a valid middleware file
+        (tmp_path / "api").mkdir()
+        (tmp_path / "api" / "_middleware.py").write_text("middleware = []")
+
+        from fastapi_filebased_routing.core.scanner import scan_middleware
+
+        files = scan_middleware(tmp_path)
+
+        assert len(files) == 1
+        assert files[0].directory == tmp_path / "api"
+
+    def test_rejects_symlink_outside_base_path_middleware(self, tmp_path: Path):
+        """Symlinks pointing outside base path are rejected for middleware."""
+        # Create a directory outside the base
+        external_dir = tmp_path / "external"
+        external_dir.mkdir()
+        external_mw = external_dir / "_middleware.py"
+        external_mw.write_text("middleware = []")
+
+        # Create base directory with symlink to external
+        base_dir = tmp_path / "app"
+        base_dir.mkdir()
+        symlink_dir = base_dir / "evil"
+        symlink_dir.symlink_to(external_dir)
+
+        # Create a valid middleware file
+        (base_dir / "api").mkdir()
+        (base_dir / "api" / "_middleware.py").write_text("middleware = []")
+
+        from fastapi_filebased_routing.core.scanner import scan_middleware
+
+        files = scan_middleware(base_dir)
+
+        # Should only find the valid middleware, not the symlinked one
+        assert len(files) == 1
+        assert files[0].directory == base_dir / "api"
+
+    def test_no_middleware_files_returns_empty_list(self, tmp_path: Path):
+        """No _middleware.py files returns empty list."""
+        (tmp_path / "api").mkdir()
+        (tmp_path / "api" / "users").mkdir()
+
+        from fastapi_filebased_routing.core.scanner import scan_middleware
+
+        files = scan_middleware(tmp_path)
+        assert files == []
+
+    def test_middleware_inside_route_groups(self, tmp_path: Path):
+        """_middleware.py inside route groups (name) discovered with correct depth."""
+        admin_group = tmp_path / "(admin)"
+        admin_group.mkdir()
+        (admin_group / "_middleware.py").write_text("middleware = []")
+
+        from fastapi_filebased_routing.core.scanner import scan_middleware
+
+        files = scan_middleware(tmp_path)
+
+        assert len(files) == 1
+        assert files[0].directory == admin_group
+        assert files[0].depth == 1
+
+    def test_accepts_string_path_middleware(self, tmp_path: Path):
+        """scan_middleware accepts string paths."""
+        (tmp_path / "_middleware.py").write_text("middleware = []")
+
+        from fastapi_filebased_routing.core.scanner import scan_middleware
+
+        files = scan_middleware(str(tmp_path))
+
+        assert len(files) == 1
+        assert files[0].directory == tmp_path
+
+    def test_raises_error_for_nonexistent_path_middleware(self, tmp_path: Path):
+        """Nonexistent base path raises RouteDiscoveryError."""
+        from fastapi_filebased_routing.core.scanner import scan_middleware
+
+        nonexistent = tmp_path / "does_not_exist"
+        with pytest.raises(RouteDiscoveryError, match="does not exist"):
+            scan_middleware(nonexistent)
+
+    def test_raises_error_for_file_not_directory_middleware(self, tmp_path: Path):
+        """File path (not directory) raises RouteDiscoveryError."""
+        from fastapi_filebased_routing.core.scanner import scan_middleware
+
+        file_path = tmp_path / "file.txt"
+        file_path.write_text("not a directory")
+        with pytest.raises(RouteDiscoveryError, match="not a directory"):
+            scan_middleware(file_path)

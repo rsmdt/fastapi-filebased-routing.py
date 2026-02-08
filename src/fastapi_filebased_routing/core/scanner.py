@@ -49,6 +49,21 @@ class RouteDefinition:
         return [s for s in self.segments if s.is_parameter]
 
 
+@dataclass(frozen=True)
+class MiddlewareFile:
+    """A discovered _middleware.py file with its directory depth.
+
+    Attributes:
+        file_path: Absolute path to the _middleware.py file.
+        directory: Absolute path to the directory containing the file.
+        depth: Directory depth relative to base path (0 = base).
+    """
+
+    file_path: Path
+    directory: Path
+    depth: int
+
+
 def scan_routes(base_path: Path | str) -> list[RouteDefinition]:
     """Scan a directory tree for route.py files and generate route definitions.
 
@@ -199,3 +214,70 @@ def _generate_route_variants(
         )
 
     return variants
+
+
+def scan_middleware(base_path: Path | str) -> list[MiddlewareFile]:
+    """Scan a directory tree for _middleware.py files.
+
+    Walks the directory tree recursively, finds all _middleware.py files,
+    and records their depth for ordering (parent before child).
+
+    Args:
+        base_path: Root directory to scan for _middleware.py files.
+
+    Returns:
+        List of MiddlewareFile objects, sorted by depth (shallowest first).
+        Empty list if no _middleware.py files are found.
+
+    Raises:
+        RouteDiscoveryError: If base_path doesn't exist or isn't a directory.
+
+    Examples:
+        files = scan_middleware("app")
+        for mw_file in files:
+            print(f"{mw_file.depth}: {mw_file.file_path}")
+    """
+    base = Path(base_path).resolve()
+
+    if not base.exists():
+        raise RouteDiscoveryError(f"Base path does not exist: {base}")
+    if not base.is_dir():
+        raise RouteDiscoveryError(f"Base path is not a directory: {base}")
+
+    middleware_files: list[MiddlewareFile] = []
+
+    for mw_file in base.rglob("_middleware.py"):
+        # Skip __pycache__ directories
+        if "__pycache__" in mw_file.parts:
+            continue
+
+        # Skip hidden directories (starting with .)
+        if any(part.startswith(".") for part in mw_file.parts):
+            continue
+
+        # Security: Resolve symlinks and verify file is within base path
+        resolved_file = mw_file.resolve()
+        if not _is_path_within(resolved_file, base):
+            continue
+
+        # Get directory containing the middleware file
+        directory = mw_file.parent
+
+        # Calculate depth relative to base
+        try:
+            relative_dir = directory.relative_to(base)
+            depth = len(relative_dir.parts)
+        except ValueError:
+            # Should not happen due to _is_path_within check, but handle defensively
+            continue
+
+        middleware_files.append(
+            MiddlewareFile(
+                file_path=mw_file,
+                directory=directory,
+                depth=depth,
+            )
+        )
+
+    # Sort by depth (shallowest first)
+    return sorted(middleware_files, key=lambda mf: mf.depth)

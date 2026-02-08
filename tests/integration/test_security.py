@@ -38,9 +38,7 @@ class TestPathTraversalBlocked:
         # Create a valid route so we confirm the base dir works
         valid_dir = route_dir / "health"
         valid_dir.mkdir()
-        (valid_dir / "route.py").write_text(
-            'def get():\n    return {"healthy": True}\n'
-        )
+        (valid_dir / "route.py").write_text('def get():\n    return {"healthy": True}\n')
 
         # Create a directory starting with '..' - valid filesystem name,
         # but scanner skips it via the hidden directory filter
@@ -95,9 +93,7 @@ class TestPathTraversalBlocked:
         # External directory simulating a traversal target
         external_dir = tmp_path / "sensitive"
         external_dir.mkdir()
-        (external_dir / "route.py").write_text(
-            'def get():\n    return {"leaked": True}\n'
-        )
+        (external_dir / "route.py").write_text('def get():\n    return {"leaked": True}\n')
 
         # Symlink that effectively performs path traversal
         traversal_link = route_dir / "escape"
@@ -195,9 +191,7 @@ class TestSymlinkOutsideBaseRejected:
         response = client.get("/api/v1/data")
         assert response.status_code == 404
 
-    def test_mixed_valid_and_external_symlink_only_valid_registered(
-        self, tmp_path: Path
-    ):
+    def test_mixed_valid_and_external_symlink_only_valid_registered(self, tmp_path: Path):
         """When valid routes and external symlinks coexist, only valid ones register."""
         route_dir = tmp_path / "routes"
         route_dir.mkdir()
@@ -205,16 +199,12 @@ class TestSymlinkOutsideBaseRejected:
         # Valid route inside base
         valid_dir = route_dir / "health"
         valid_dir.mkdir()
-        (valid_dir / "route.py").write_text(
-            'def get():\n    return {"status": "healthy"}\n'
-        )
+        (valid_dir / "route.py").write_text('def get():\n    return {"status": "healthy"}\n')
 
         # External symlink
         external_dir = tmp_path / "external"
         external_dir.mkdir()
-        (external_dir / "route.py").write_text(
-            'def get():\n    return {"leaked": True}\n'
-        )
+        (external_dir / "route.py").write_text('def get():\n    return {"leaked": True}\n')
         symlink = route_dir / "leaked"
         symlink.symlink_to(external_dir)
 
@@ -253,9 +243,7 @@ class TestSymlinkInsideBaseAllowed:
         # Create the actual route
         real_dir = route_dir / "users"
         real_dir.mkdir()
-        (real_dir / "route.py").write_text(
-            'def get():\n    return {"source": "users"}\n'
-        )
+        (real_dir / "route.py").write_text('def get():\n    return {"source": "users"}\n')
 
         # Symlink inside the same base (directory-level)
         alias_dir = route_dir / "people"
@@ -284,9 +272,7 @@ class TestSymlinkInsideBaseAllowed:
         shared_dir = route_dir / "shared"
         shared_dir.mkdir()
         shared_route = shared_dir / "route.py"
-        shared_route.write_text(
-            'def get():\n    return {"shared": True}\n'
-        )
+        shared_route.write_text('def get():\n    return {"shared": True}\n')
 
         # Create another directory that symlinks the route.py
         alias_dir = route_dir / "alias"
@@ -454,9 +440,7 @@ class TestNonRouteFilesIgnored:
         users_dir = route_dir / "users"
         users_dir.mkdir()
         (users_dir / "route.py").write_text(VALID_HANDLER)
-        (users_dir / "helper.py").write_text(
-            'def compute():\n    return 42\n'
-        )
+        (users_dir / "helper.py").write_text("def compute():\n    return 42\n")
 
         router = create_router_from_path(route_dir)
 
@@ -469,9 +453,7 @@ class TestNonRouteFilesIgnored:
         assert response.status_code == 200
 
         # Verify only one route registered (GET /users)
-        http_routes = [
-            r for r in router.routes if hasattr(r, "methods")
-        ]
+        http_routes = [r for r in router.routes if hasattr(r, "methods")]
         assert len(http_routes) == 1
 
     def test_utils_and_models_files_ignored(self, tmp_path: Path):
@@ -483,8 +465,8 @@ class TestNonRouteFilesIgnored:
         api_dir.mkdir()
         (api_dir / "route.py").write_text(VALID_HANDLER)
         (api_dir / "utils.py").write_text('CONSTANT = "value"\n')
-        (api_dir / "models.py").write_text('class User: pass\n')
-        (api_dir / "schemas.py").write_text('SCHEMA = {}\n')
+        (api_dir / "models.py").write_text("class User: pass\n")
+        (api_dir / "schemas.py").write_text("SCHEMA = {}\n")
 
         router = create_router_from_path(route_dir)
 
@@ -496,9 +478,7 @@ class TestNonRouteFilesIgnored:
         assert response.status_code == 200
 
         # Only one route registered despite multiple .py files
-        http_routes = [
-            r for r in router.routes if hasattr(r, "methods")
-        ]
+        http_routes = [r for r in router.routes if hasattr(r, "methods")]
         assert len(http_routes) == 1
 
     def test_python_file_named_get_py_ignored(self, tmp_path: Path):
@@ -572,15 +552,11 @@ class TestHiddenDirectoriesSkipped:
         # Valid parent with hidden child
         api_dir = route_dir / "api"
         api_dir.mkdir()
-        (api_dir / "route.py").write_text(
-            'def get():\n    return {"api": True}\n'
-        )
+        (api_dir / "route.py").write_text('def get():\n    return {"api": True}\n')
 
         hidden_child = api_dir / ".internal"
         hidden_child.mkdir()
-        (hidden_child / "route.py").write_text(
-            'def get():\n    return {"hidden": True}\n'
-        )
+        (hidden_child / "route.py").write_text('def get():\n    return {"hidden": True}\n')
 
         router = create_router_from_path(route_dir)
 
@@ -604,25 +580,17 @@ class TestHiddenDirectoriesSkipped:
 
         # Visible routes
         (route_dir / "health").mkdir()
-        (route_dir / "health" / "route.py").write_text(
-            'def get():\n    return {"healthy": True}\n'
-        )
+        (route_dir / "health" / "route.py").write_text('def get():\n    return {"healthy": True}\n')
 
         (route_dir / "users").mkdir()
-        (route_dir / "users" / "route.py").write_text(
-            'def get():\n    return {"users": []}\n'
-        )
+        (route_dir / "users" / "route.py").write_text('def get():\n    return {"users": []}\n')
 
         # Hidden routes (should be skipped)
         (route_dir / ".debug").mkdir()
-        (route_dir / ".debug" / "route.py").write_text(
-            'def get():\n    return {"debug": True}\n'
-        )
+        (route_dir / ".debug" / "route.py").write_text('def get():\n    return {"debug": True}\n')
 
         (route_dir / ".config").mkdir()
-        (route_dir / ".config" / "route.py").write_text(
-            'def get():\n    return {"config": True}\n'
-        )
+        (route_dir / ".config" / "route.py").write_text('def get():\n    return {"config": True}\n')
 
         router = create_router_from_path(route_dir)
 

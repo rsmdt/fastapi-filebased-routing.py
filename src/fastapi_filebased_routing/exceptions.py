@@ -16,7 +16,6 @@ class FileBasedRoutingError(Exception):
     """
 
 
-
 class PathParseError(FileBasedRoutingError):
     """Raised when a directory name has invalid syntax.
 
@@ -33,7 +32,6 @@ class PathParseError(FileBasedRoutingError):
     """
 
 
-
 class RouteDiscoveryError(FileBasedRoutingError):
     """Raised when the base path doesn't exist or can't be scanned.
 
@@ -43,7 +41,6 @@ class RouteDiscoveryError(FileBasedRoutingError):
     Example:
         RouteDiscoveryError("Base path '/app/routes' does not exist")
     """
-
 
 
 class RouteValidationError(FileBasedRoutingError):
@@ -63,7 +60,6 @@ class RouteValidationError(FileBasedRoutingError):
     """
 
 
-
 class DuplicateRouteError(FileBasedRoutingError):
     """Raised when two route files resolve to the same path+method.
 
@@ -77,3 +73,19 @@ class DuplicateRouteError(FileBasedRoutingError):
         )
     """
 
+
+class MiddlewareValidationError(FileBasedRoutingError):
+    """Raised when middleware configuration is invalid.
+
+    This exception is raised when:
+        - A _middleware.py file fails to import
+        - A middleware attribute contains non-callable values
+        - A class handler(route): block is misconfigured
+        - Middleware is not async
+
+    Example:
+        MiddlewareValidationError(
+            "Invalid middleware in _middleware.py: "
+            "middleware list contains non-callable at index 2"
+        )
+    """

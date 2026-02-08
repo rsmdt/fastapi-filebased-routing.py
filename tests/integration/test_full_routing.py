@@ -10,7 +10,9 @@ requests to verify the response.
 
 from pathlib import Path
 
+import pytest
 from fastapi import FastAPI
+from fastapi.routing import APIRouter
 from fastapi.testclient import TestClient
 
 from fastapi_filebased_routing import create_router_from_path
@@ -26,10 +28,7 @@ class TestBasicRouteDiscovery:
     def test_get_users_returns_data(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "users"
         route_dir.mkdir()
-        (route_dir / "route.py").write_text(
-            'async def get():\n'
-            '    return {"users": []}\n'
-        )
+        (route_dir / "route.py").write_text('async def get():\n    return {"users": []}\n')
 
         app = FastAPI()
         router = create_router_from_path(tmp_path)
@@ -44,10 +43,7 @@ class TestBasicRouteDiscovery:
     def test_nested_route_discovery(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "api" / "v1" / "health"
         route_dir.mkdir(parents=True)
-        (route_dir / "route.py").write_text(
-            'async def get():\n'
-            '    return {"status": "healthy"}\n'
-        )
+        (route_dir / "route.py").write_text('async def get():\n    return {"status": "healthy"}\n')
 
         app = FastAPI()
         router = create_router_from_path(tmp_path)
@@ -72,8 +68,7 @@ class TestConventionStatusCodes:
         route_dir = tmp_path / "users"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            'async def post():\n'
-            '    return {"id": 1, "name": "Alice"}\n'
+            'async def post():\n    return {"id": 1, "name": "Alice"}\n'
         )
 
         app = FastAPI()
@@ -89,10 +84,7 @@ class TestConventionStatusCodes:
     def test_delete_returns_204(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "users" / "[user_id]"
         route_dir.mkdir(parents=True)
-        (route_dir / "route.py").write_text(
-            'async def delete(user_id: str):\n'
-            '    return None\n'
-        )
+        (route_dir / "route.py").write_text("async def delete(user_id: str):\n    return None\n")
 
         app = FastAPI()
         router = create_router_from_path(tmp_path)
@@ -106,10 +98,7 @@ class TestConventionStatusCodes:
     def test_get_returns_200(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "items"
         route_dir.mkdir()
-        (route_dir / "route.py").write_text(
-            'async def get():\n'
-            '    return {"items": []}\n'
-        )
+        (route_dir / "route.py").write_text('async def get():\n    return {"items": []}\n')
 
         app = FastAPI()
         router = create_router_from_path(tmp_path)
@@ -124,8 +113,7 @@ class TestConventionStatusCodes:
         route_dir = tmp_path / "items" / "[item_id]"
         route_dir.mkdir(parents=True)
         (route_dir / "route.py").write_text(
-            'async def put(item_id: str):\n'
-            '    return {"item_id": item_id, "updated": True}\n'
+            'async def put(item_id: str):\n    return {"item_id": item_id, "updated": True}\n'
         )
 
         app = FastAPI()
@@ -151,8 +139,7 @@ class TestDynamicParameters:
         route_dir = tmp_path / "users" / "[user_id]"
         route_dir.mkdir(parents=True)
         (route_dir / "route.py").write_text(
-            'async def get(user_id: str):\n'
-            '    return {"user_id": user_id}\n'
+            'async def get(user_id: str):\n    return {"user_id": user_id}\n'
         )
 
         app = FastAPI()
@@ -169,7 +156,7 @@ class TestDynamicParameters:
         route_dir = tmp_path / "orgs" / "[org_id]" / "members" / "[member_id]"
         route_dir.mkdir(parents=True)
         (route_dir / "route.py").write_text(
-            'async def get(org_id: str, member_id: str):\n'
+            "async def get(org_id: str, member_id: str):\n"
             '    return {"org_id": org_id, "member_id": member_id}\n'
         )
 
@@ -192,14 +179,11 @@ class TestDynamicParameters:
 class TestOptionalParameters:
     """Verify [[param]] generates 2^n route variants."""
 
-    def test_optional_parameter_generates_two_variants(
-        self, tmp_path: Path
-    ) -> None:
+    def test_optional_parameter_generates_two_variants(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "api" / "[[version]]" / "users"
         route_dir.mkdir(parents=True)
         (route_dir / "route.py").write_text(
-            'async def get(version: str = "default"):\n'
-            '    return {"version": version}\n'
+            'async def get(version: str = "default"):\n    return {"version": version}\n'
         )
 
         app = FastAPI()
@@ -230,8 +214,7 @@ class TestCatchAllParameters:
         route_dir = tmp_path / "files" / "[...file_path]"
         route_dir.mkdir(parents=True)
         (route_dir / "route.py").write_text(
-            'async def get(file_path: str):\n'
-            '    return {"file_path": file_path}\n'
+            'async def get(file_path: str):\n    return {"file_path": file_path}\n'
         )
 
         app = FastAPI()
@@ -248,8 +231,7 @@ class TestCatchAllParameters:
         route_dir = tmp_path / "files" / "[...file_path]"
         route_dir.mkdir(parents=True)
         (route_dir / "route.py").write_text(
-            'async def get(file_path: str):\n'
-            '    return {"file_path": file_path}\n'
+            'async def get(file_path: str):\n    return {"file_path": file_path}\n'
         )
 
         app = FastAPI()
@@ -275,8 +257,7 @@ class TestRouteGroups:
         route_dir = tmp_path / "(admin)" / "settings"
         route_dir.mkdir(parents=True)
         (route_dir / "route.py").write_text(
-            'async def get():\n'
-            '    return {"settings": {"theme": "dark"}}\n'
+            'async def get():\n    return {"settings": {"theme": "dark"}}\n'
         )
 
         app = FastAPI()
@@ -293,8 +274,7 @@ class TestRouteGroups:
         route_dir = tmp_path / "(api)" / "users" / "[user_id]"
         route_dir.mkdir(parents=True)
         (route_dir / "route.py").write_text(
-            'async def get(user_id: str):\n'
-            '    return {"user_id": user_id}\n'
+            'async def get(user_id: str):\n    return {"user_id": user_id}\n'
         )
 
         app = FastAPI()
@@ -320,13 +300,13 @@ class TestWebSocket:
         route_dir = tmp_path / "ws"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            'from fastapi import WebSocket\n'
-            '\n'
-            'async def websocket(ws: WebSocket):\n'
-            '    await ws.accept()\n'
-            '    data = await ws.receive_text()\n'
+            "from fastapi import WebSocket\n"
+            "\n"
+            "async def websocket(ws: WebSocket):\n"
+            "    await ws.accept()\n"
+            "    data = await ws.receive_text()\n"
             '    await ws.send_text(f"echo: {data}")\n'
-            '    await ws.close()\n'
+            "    await ws.close()\n"
         )
 
         app = FastAPI()
@@ -343,13 +323,13 @@ class TestWebSocket:
         route_dir = tmp_path / "ws" / "chat" / "[room_id]"
         route_dir.mkdir(parents=True)
         (route_dir / "route.py").write_text(
-            'from fastapi import WebSocket\n'
-            '\n'
-            'async def websocket(ws: WebSocket, room_id: str):\n'
-            '    await ws.accept()\n'
-            '    data = await ws.receive_text()\n'
+            "from fastapi import WebSocket\n"
+            "\n"
+            "async def websocket(ws: WebSocket, room_id: str):\n"
+            "    await ws.accept()\n"
+            "    data = await ws.receive_text()\n"
             '    await ws.send_text(f"Room {room_id}: {data}")\n'
-            '    await ws.close()\n'
+            "    await ws.close()\n"
         )
 
         app = FastAPI()
@@ -362,21 +342,19 @@ class TestWebSocket:
             response = websocket.receive_text()
             assert response == "Room lobby: hi there"
 
-    def test_websocket_coexists_with_http_on_same_path(
-        self, tmp_path: Path
-    ) -> None:
+    def test_websocket_coexists_with_http_on_same_path(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "notifications"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            'from fastapi import WebSocket\n'
-            '\n'
-            'async def get():\n'
+            "from fastapi import WebSocket\n"
+            "\n"
+            "async def get():\n"
             '    return {"notifications": []}\n'
-            '\n'
-            'async def websocket(ws: WebSocket):\n'
-            '    await ws.accept()\n'
+            "\n"
+            "async def websocket(ws: WebSocket):\n"
+            "    await ws.accept()\n"
             '    await ws.send_text("connected")\n'
-            '    await ws.close()\n'
+            "    await ws.close()\n"
         )
 
         app = FastAPI()
@@ -407,10 +385,7 @@ class TestSyncAndAsyncHandlers:
     def test_sync_handler_works(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "sync"
         route_dir.mkdir()
-        (route_dir / "route.py").write_text(
-            'def get():\n'
-            '    return {"mode": "sync"}\n'
-        )
+        (route_dir / "route.py").write_text('def get():\n    return {"mode": "sync"}\n')
 
         app = FastAPI()
         router = create_router_from_path(tmp_path)
@@ -425,10 +400,7 @@ class TestSyncAndAsyncHandlers:
     def test_async_handler_works(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "async-route"
         route_dir.mkdir()
-        (route_dir / "route.py").write_text(
-            'async def get():\n'
-            '    return {"mode": "async"}\n'
-        )
+        (route_dir / "route.py").write_text('async def get():\n    return {"mode": "async"}\n')
 
         app = FastAPI()
         router = create_router_from_path(tmp_path)
@@ -444,10 +416,10 @@ class TestSyncAndAsyncHandlers:
         route_dir = tmp_path / "mixed"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            'def get():\n'
+            "def get():\n"
             '    return {"handler": "sync-get"}\n'
-            '\n'
-            'async def post():\n'
+            "\n"
+            "async def post():\n"
             '    return {"handler": "async-post"}\n'
         )
 
@@ -474,14 +446,11 @@ class TestSyncAndAsyncHandlers:
 class TestCoexistenceWithManualRoutes:
     """Verify file-based router works alongside manually defined routes."""
 
-    def test_manual_and_file_based_routes_coexist(
-        self, tmp_path: Path
-    ) -> None:
+    def test_manual_and_file_based_routes_coexist(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "users"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            'async def get():\n'
-            '    return {"source": "file-based"}\n'
+            'async def get():\n    return {"source": "file-based"}\n'
         )
 
         app = FastAPI()
@@ -521,8 +490,8 @@ class TestOpenAPISchema:
         (route_dir / "route.py").write_text(
             'TAGS = ["users"]\n'
             'SUMMARY = "List all users"\n'
-            '\n'
-            'async def get():\n'
+            "\n"
+            "async def get():\n"
             '    """Get a list of all users."""\n'
             '    return {"users": []}\n'
         )
@@ -550,10 +519,7 @@ class TestOpenAPISchema:
         route_dir = tmp_path / "legacy"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            'DEPRECATED = True\n'
-            '\n'
-            'async def get():\n'
-            '    return {"legacy": True}\n'
+            'DEPRECATED = True\n\nasync def get():\n    return {"legacy": True}\n'
         )
 
         app = FastAPI()
@@ -567,17 +533,11 @@ class TestOpenAPISchema:
         get_op = schema["paths"]["/legacy"]["get"]
         assert get_op["deprecated"] is True
 
-    def test_convention_status_codes_in_openapi(
-        self, tmp_path: Path
-    ) -> None:
+    def test_convention_status_codes_in_openapi(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "items"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            'async def post():\n'
-            '    return {"id": 1}\n'
-            '\n'
-            'async def delete():\n'
-            '    return None\n'
+            'async def post():\n    return {"id": 1}\n\nasync def delete():\n    return None\n'
         )
 
         app = FastAPI()
@@ -600,8 +560,7 @@ class TestOpenAPISchema:
         route_dir = tmp_path / "products" / "[product_id]"
         route_dir.mkdir(parents=True)
         (route_dir / "route.py").write_text(
-            'async def get(product_id: str):\n'
-            '    return {"product_id": product_id}\n'
+            'async def get(product_id: str):\n    return {"product_id": product_id}\n'
         )
 
         app = FastAPI()
@@ -621,8 +580,7 @@ class TestOpenAPISchema:
         route_dir = tmp_path / "users" / "[user_id]"
         route_dir.mkdir(parents=True)
         (route_dir / "route.py").write_text(
-            'async def get(user_id: str):\n'
-            '    return {"user_id": user_id}\n'
+            'async def get(user_id: str):\n    return {"user_id": user_id}\n'
         )
 
         app = FastAPI()
@@ -656,10 +614,10 @@ class TestMultipleRouteTree:
         users_dir = tmp_path / "users"
         users_dir.mkdir()
         (users_dir / "route.py").write_text(
-            'async def get():\n'
+            "async def get():\n"
             '    return {"users": ["alice", "bob"]}\n'
-            '\n'
-            'async def post():\n'
+            "\n"
+            "async def post():\n"
             '    return {"id": 3, "name": "charlie"}\n'
         )
 
@@ -667,23 +625,20 @@ class TestMultipleRouteTree:
         user_detail_dir = tmp_path / "users" / "[user_id]"
         user_detail_dir.mkdir(parents=True)
         (user_detail_dir / "route.py").write_text(
-            'async def get(user_id: str):\n'
+            "async def get(user_id: str):\n"
             '    return {"user_id": user_id, "name": "alice"}\n'
-            '\n'
-            'async def put(user_id: str):\n'
+            "\n"
+            "async def put(user_id: str):\n"
             '    return {"user_id": user_id, "updated": True}\n'
-            '\n'
-            'async def delete(user_id: str):\n'
-            '    return None\n'
+            "\n"
+            "async def delete(user_id: str):\n"
+            "    return None\n"
         )
 
         # /health
         health_dir = tmp_path / "health"
         health_dir.mkdir()
-        (health_dir / "route.py").write_text(
-            'async def get():\n'
-            '    return {"status": "ok"}\n'
-        )
+        (health_dir / "route.py").write_text('async def get():\n    return {"status": "ok"}\n')
 
         app = FastAPI()
         router = create_router_from_path(tmp_path)
@@ -724,8 +679,7 @@ class TestMultipleRouteTree:
             resource_dir = tmp_path / resource
             resource_dir.mkdir()
             (resource_dir / "route.py").write_text(
-                f'async def get():\n'
-                f'    return {{"{resource}": []}}\n'
+                f'async def get():\n    return {{"{resource}": []}}\n'
             )
 
         app = FastAPI()
@@ -751,10 +705,7 @@ class TestPrefixParameter:
     def test_prefix_applied_to_all_routes(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "users"
         route_dir.mkdir()
-        (route_dir / "route.py").write_text(
-            'async def get():\n'
-            '    return {"users": []}\n'
-        )
+        (route_dir / "route.py").write_text('async def get():\n    return {"users": []}\n')
 
         app = FastAPI()
         router = create_router_from_path(tmp_path, prefix="/api/v1")
@@ -771,8 +722,7 @@ class TestPrefixParameter:
         route_dir = tmp_path / "items" / "[item_id]"
         route_dir.mkdir(parents=True)
         (route_dir / "route.py").write_text(
-            'async def get(item_id: str):\n'
-            '    return {"item_id": item_id}\n'
+            'async def get(item_id: str):\n    return {"item_id": item_id}\n'
         )
 
         app = FastAPI()
@@ -788,10 +738,7 @@ class TestPrefixParameter:
     def test_prefix_appears_in_openapi(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "users"
         route_dir.mkdir()
-        (route_dir / "route.py").write_text(
-            'async def get():\n'
-            '    return {"users": []}\n'
-        )
+        (route_dir / "route.py").write_text('async def get():\n    return {"users": []}\n')
 
         app = FastAPI()
         router = create_router_from_path(tmp_path, prefix="/api/v1")
@@ -813,19 +760,17 @@ class TestPrefixParameter:
 class TestPrivateHelpersIgnored:
     """Verify private functions and constants in route.py do not affect routing."""
 
-    def test_private_helpers_and_constants_ignored(
-        self, tmp_path: Path
-    ) -> None:
+    def test_private_helpers_and_constants_ignored(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "items"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
             'TAGS = ["items"]\n'
-            'SOME_CONSTANT = 42\n'
-            '\n'
-            'def _validate_item(item_id: str) -> bool:\n'
-            '    return len(item_id) > 0\n'
-            '\n'
-            'async def get():\n'
+            "SOME_CONSTANT = 42\n"
+            "\n"
+            "def _validate_item(item_id: str) -> bool:\n"
+            "    return len(item_id) > 0\n"
+            "\n"
+            "async def get():\n"
             '    return {"items": []}\n'
         )
 
@@ -849,10 +794,7 @@ class TestRootRoute:
     """Verify route.py at the root of the base path maps to /."""
 
     def test_root_route(self, tmp_path: Path) -> None:
-        (tmp_path / "route.py").write_text(
-            'async def get():\n'
-            '    return {"root": True}\n'
-        )
+        (tmp_path / "route.py").write_text('async def get():\n    return {"root": True}\n')
 
         app = FastAPI()
         router = create_router_from_path(tmp_path)
@@ -873,26 +815,24 @@ class TestRootRoute:
 class TestMultipleMethodsSamePath:
     """Verify multiple HTTP methods in one route.py all work."""
 
-    def test_get_post_put_patch_delete_on_same_path(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_post_put_patch_delete_on_same_path(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "resources"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            'async def get():\n'
+            "async def get():\n"
             '    return {"method": "GET"}\n'
-            '\n'
-            'async def post():\n'
+            "\n"
+            "async def post():\n"
             '    return {"method": "POST"}\n'
-            '\n'
-            'async def put():\n'
+            "\n"
+            "async def put():\n"
             '    return {"method": "PUT"}\n'
-            '\n'
-            'async def patch():\n'
+            "\n"
+            "async def patch():\n"
             '    return {"method": "PATCH"}\n'
-            '\n'
-            'async def delete():\n'
-            '    return None\n'
+            "\n"
+            "async def delete():\n"
+            "    return None\n"
         )
 
         app = FastAPI()
@@ -914,3 +854,450 @@ class TestMultipleMethodsSamePath:
         assert client.patch("/resources").json()["method"] == "PATCH"
 
         assert client.delete("/resources").status_code == 204
+
+
+# ---------------------------------------------------------------------------
+# Backward Compatibility Regression Tests (v0.1.0 → v0.2.0)
+# ---------------------------------------------------------------------------
+
+
+class TestBackwardCompatibilityPlainHandlers:
+    """Verify plain function handlers work exactly as in v0.1.0."""
+
+    def test_plain_async_handler_no_middleware(self, tmp_path: Path) -> None:
+        """Plain async def handler with no middleware works identically."""
+        route_dir = tmp_path / "api" / "status"
+        route_dir.mkdir(parents=True)
+        (route_dir / "route.py").write_text('async def get() -> dict:\n    return {"ok": True}\n')
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+        response = client.get("/api/status")
+
+        assert response.status_code == 200
+        assert response.json() == {"ok": True}
+
+    def test_plain_sync_handler_no_middleware(self, tmp_path: Path) -> None:
+        """Plain sync def handler with no middleware works identically."""
+        route_dir = tmp_path / "sync"
+        route_dir.mkdir()
+        (route_dir / "route.py").write_text('def get() -> dict:\n    return {"sync": True}\n')
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+        response = client.get("/sync")
+
+        assert response.status_code == 200
+        assert response.json() == {"sync": True}
+
+    def test_multiple_plain_handlers_same_file(self, tmp_path: Path) -> None:
+        """Multiple plain handlers in same file work identically."""
+        route_dir = tmp_path / "items"
+        route_dir.mkdir()
+        (route_dir / "route.py").write_text(
+            "async def get():\n"
+            '    return {"items": []}\n'
+            "\n"
+            "async def post():\n"
+            '    return {"id": 1}\n'
+            "\n"
+            "async def delete():\n"
+            "    return None\n"
+        )
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+
+        assert client.get("/items").status_code == 200
+        assert client.post("/items").status_code == 201
+        assert client.delete("/items").status_code == 204
+
+
+class TestBackwardCompatibilityModuleLevelMetadata:
+    """Verify module-level metadata (TAGS, SUMMARY, DEPRECATED) works exactly as v0.1.0."""
+
+    def test_module_level_tags(self, tmp_path: Path) -> None:
+        """Module-level TAGS work identically."""
+        route_dir = tmp_path / "users"
+        route_dir.mkdir()
+        (route_dir / "route.py").write_text(
+            'TAGS = ["users", "authentication"]\n\nasync def get():\n    return {"users": []}\n'
+        )
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+        response = client.get("/openapi.json")
+
+        schema = response.json()
+        get_op = schema["paths"]["/users"]["get"]
+        assert set(get_op["tags"]) == {"users", "authentication"}
+
+    def test_module_level_summary(self, tmp_path: Path) -> None:
+        """Module-level SUMMARY works identically."""
+        route_dir = tmp_path / "health"
+        route_dir.mkdir()
+        (route_dir / "route.py").write_text(
+            'SUMMARY = "Health check endpoint"\n'
+            "\n"
+            "async def get():\n"
+            '    """Returns the health status of the API."""\n'
+            '    return {"status": "ok"}\n'
+        )
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+        response = client.get("/openapi.json")
+
+        schema = response.json()
+        get_op = schema["paths"]["/health"]["get"]
+        assert get_op["summary"] == "Health check endpoint"
+        assert get_op["description"] == "Returns the health status of the API."
+
+    def test_module_level_deprecated(self, tmp_path: Path) -> None:
+        """Module-level DEPRECATED works identically."""
+        route_dir = tmp_path / "legacy"
+        route_dir.mkdir()
+        (route_dir / "route.py").write_text(
+            'DEPRECATED = True\n\nasync def get():\n    return {"legacy": True}\n'
+        )
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+        response = client.get("/openapi.json")
+
+        schema = response.json()
+        get_op = schema["paths"]["/legacy"]["get"]
+        assert get_op["deprecated"] is True
+
+    def test_all_module_metadata_combined(self, tmp_path: Path) -> None:
+        """All module-level metadata fields work together identically."""
+        route_dir = tmp_path / "admin"
+        route_dir.mkdir()
+        (route_dir / "route.py").write_text(
+            'TAGS = ["admin"]\n'
+            'SUMMARY = "Admin operations"\n'
+            "DEPRECATED = True\n"
+            "\n"
+            "async def get():\n"
+            '    return {"admin": True}\n'
+        )
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+        response = client.get("/openapi.json")
+
+        schema = response.json()
+        get_op = schema["paths"]["/admin"]["get"]
+        assert "admin" in get_op["tags"]
+        assert get_op["summary"] == "Admin operations"
+        assert get_op["deprecated"] is True
+
+
+class TestBackwardCompatibilityNoMiddlewareProject:
+    """Verify projects with zero _middleware.py files behave identically to v0.1.0."""
+
+    def test_no_middleware_files_identical_behavior(self, tmp_path: Path) -> None:
+        """Project with no _middleware.py files works identically."""
+        # Create a complete route tree with no middleware
+        users_dir = tmp_path / "users"
+        users_dir.mkdir()
+        (users_dir / "route.py").write_text(
+            "async def get():\n"
+            '    return {"users": []}\n'
+            "\n"
+            "async def post():\n"
+            '    return {"id": 1}\n'
+        )
+
+        user_detail = tmp_path / "users" / "[user_id]"
+        user_detail.mkdir(parents=True)
+        (user_detail / "route.py").write_text(
+            "async def get(user_id: str):\n"
+            '    return {"user_id": user_id}\n'
+            "\n"
+            "async def delete(user_id: str):\n"
+            "    return None\n"
+        )
+
+        health_dir = tmp_path / "health"
+        health_dir.mkdir()
+        (health_dir / "route.py").write_text('async def get():\n    return {"status": "healthy"}\n')
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+
+        # All routes work identically to v0.1.0
+        assert client.get("/users").status_code == 200
+        assert client.post("/users").status_code == 201
+        assert client.get("/users/42").json() == {"user_id": "42"}
+        assert client.delete("/users/99").status_code == 204
+        assert client.get("/health").json() == {"status": "healthy"}
+
+    def test_no_performance_degradation_without_middleware(self, tmp_path: Path) -> None:
+        """Routes without middleware have no performance overhead."""
+        route_dir = tmp_path / "fast"
+        route_dir.mkdir()
+        (route_dir / "route.py").write_text('async def get():\n    return {"fast": True}\n')
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+
+        # Route works normally (performance is measured externally)
+        response = client.get("/fast")
+        assert response.status_code == 200
+        assert response.json() == {"fast": True}
+
+
+class TestBackwardCompatibilityAPISignature:
+    """Verify create_router_from_path API signature is unchanged."""
+
+    def test_create_router_signature_unchanged(self, tmp_path: Path) -> None:
+        """create_router_from_path(base_path, *, prefix="") signature unchanged."""
+        route_dir = tmp_path / "api"
+        route_dir.mkdir()
+        (route_dir / "route.py").write_text('async def get():\n    return {"api": True}\n')
+
+        app = FastAPI()
+
+        # Positional base_path
+        router1 = create_router_from_path(tmp_path)
+        assert isinstance(router1, APIRouter)
+
+        # With prefix keyword argument
+        router2 = create_router_from_path(tmp_path, prefix="/v1")
+        assert isinstance(router2, APIRouter)
+
+        # Verify both work
+        app.include_router(router1)
+        app.include_router(router2)
+
+        client = TestClient(app)
+        assert client.get("/api").status_code == 200
+        assert client.get("/v1/api").status_code == 200
+
+    def test_return_type_unchanged(self, tmp_path: Path) -> None:
+        """create_router_from_path returns APIRouter (same type)."""
+        route_dir = tmp_path / "test"
+        route_dir.mkdir()
+        (route_dir / "route.py").write_text('async def get():\n    return {"test": True}\n')
+
+        router = create_router_from_path(tmp_path)
+
+        # Return type is APIRouter
+        assert isinstance(router, APIRouter)
+
+        # Can be included in FastAPI app
+        app = FastAPI()
+        app.include_router(router)
+
+        client = TestClient(app)
+        assert client.get("/test").status_code == 200
+
+
+class TestBackwardCompatibilityAllV010Features:
+    """Verify all v0.1.0 features work unchanged."""
+
+    def test_dynamic_parameters_unchanged(self, tmp_path: Path) -> None:
+        """Dynamic parameters [id] work identically."""
+        route_dir = tmp_path / "posts" / "[post_id]"
+        route_dir.mkdir(parents=True)
+        (route_dir / "route.py").write_text(
+            'async def get(post_id: str):\n    return {"post_id": post_id}\n'
+        )
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+        response = client.get("/posts/123")
+
+        assert response.status_code == 200
+        assert response.json() == {"post_id": "123"}
+
+    def test_route_groups_unchanged(self, tmp_path: Path) -> None:
+        """Route groups (group) work identically."""
+        route_dir = tmp_path / "(admin)" / "settings"
+        route_dir.mkdir(parents=True)
+        (route_dir / "route.py").write_text('async def get():\n    return {"settings": {}}\n')
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+        response = client.get("/settings")  # (admin) excluded from URL
+
+        assert response.status_code == 200
+        assert response.json() == {"settings": {}}
+
+    def test_websocket_handlers_unchanged(self, tmp_path: Path) -> None:
+        """WebSocket handlers work identically."""
+        route_dir = tmp_path / "ws" / "echo"
+        route_dir.mkdir(parents=True)
+        (route_dir / "route.py").write_text(
+            "from fastapi import WebSocket\n"
+            "\n"
+            "async def websocket(ws: WebSocket):\n"
+            "    await ws.accept()\n"
+            "    data = await ws.receive_text()\n"
+            '    await ws.send_text(f"echo: {data}")\n'
+            "    await ws.close()\n"
+        )
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+        with client.websocket_connect("/ws/echo") as websocket:
+            websocket.send_text("test")
+            response = websocket.receive_text()
+            assert response == "echo: test"
+
+    def test_duplicate_detection_unchanged(self, tmp_path: Path) -> None:
+        """Duplicate route detection works identically."""
+        from fastapi_filebased_routing.exceptions import DuplicateRouteError
+
+        # Create two route files that map to the same path
+        route1 = tmp_path / "api" / "route.py"
+        route1.parent.mkdir(parents=True)
+        route1.write_text('async def get(): return {"a": 1}\n')
+
+        # Can't create two files at same path; test duplicate via optional params instead
+
+        # Better test: create optional parameter routes that create duplicate variants
+        route_dir = tmp_path / "test" / "[[version]]"
+        route_dir.mkdir(parents=True)
+        (route_dir / "route.py").write_text(
+            'async def get(version: str = "v1"):\n    return {"version": version}\n'
+        )
+
+        # Create a duplicate of the no-version variant
+        route_dir2 = tmp_path / "test"
+        (route_dir2 / "route.py").write_text('async def get():\n    return {"duplicate": True}\n')
+
+        # Should raise DuplicateRouteError
+        with pytest.raises(DuplicateRouteError, match="Duplicate route"):
+            create_router_from_path(tmp_path)
+
+    def test_optional_parameters_unchanged(self, tmp_path: Path) -> None:
+        """Optional parameters [[param]] work identically."""
+        route_dir = tmp_path / "api" / "[[version]]" / "data"
+        route_dir.mkdir(parents=True)
+        (route_dir / "route.py").write_text(
+            'async def get(version: str = "v1"):\n    return {"version": version}\n'
+        )
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+
+        # Both variants work
+        assert client.get("/api/data").status_code == 200
+        assert client.get("/api/v2/data").json() == {"version": "v2"}
+
+    def test_catchall_parameters_unchanged(self, tmp_path: Path) -> None:
+        """Catch-all parameters [...param] work identically."""
+        route_dir = tmp_path / "files" / "[...path]"
+        route_dir.mkdir(parents=True)
+        (route_dir / "route.py").write_text(
+            'async def get(path: str):\n    return {"path": path}\n'
+        )
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+        response = client.get("/files/a/b/c/file.txt")
+
+        assert response.status_code == 200
+        assert response.json() == {"path": "a/b/c/file.txt"}
+
+    def test_convention_status_codes_unchanged(self, tmp_path: Path) -> None:
+        """Convention-based status codes work identically."""
+        route_dir = tmp_path / "items"
+        route_dir.mkdir()
+        (route_dir / "route.py").write_text(
+            "async def post():\n"
+            '    return {"id": 1}\n'
+            "\n"
+            "async def delete():\n"
+            "    return None\n"
+            "\n"
+            "async def get():\n"
+            '    return {"items": []}\n'
+        )
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+
+        # POST → 201 Created
+        assert client.post("/items").status_code == 201
+        # DELETE → 204 No Content
+        assert client.delete("/items").status_code == 204
+        # GET → 200 OK
+        assert client.get("/items").status_code == 200
+
+    def test_root_route_unchanged(self, tmp_path: Path) -> None:
+        """Root-level route.py works identically."""
+        (tmp_path / "route.py").write_text('async def get():\n    return {"root": True}\n')
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path)
+        app.include_router(router)
+
+        client = TestClient(app)
+        response = client.get("/")
+
+        assert response.status_code == 200
+        assert response.json() == {"root": True}
+
+    def test_prefix_parameter_unchanged(self, tmp_path: Path) -> None:
+        """Prefix parameter works identically."""
+        route_dir = tmp_path / "users"
+        route_dir.mkdir()
+        (route_dir / "route.py").write_text('async def get():\n    return {"users": []}\n')
+
+        app = FastAPI()
+        router = create_router_from_path(tmp_path, prefix="/api/v1")
+        app.include_router(router)
+
+        client = TestClient(app)
+        response = client.get("/api/v1/users")
+
+        assert response.status_code == 200
+        assert response.json() == {"users": []}

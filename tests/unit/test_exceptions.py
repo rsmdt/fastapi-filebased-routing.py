@@ -5,6 +5,7 @@ import pytest
 from fastapi_filebased_routing.exceptions import (
     DuplicateRouteError,
     FileBasedRoutingError,
+    MiddlewareValidationError,
     PathParseError,
     RouteDiscoveryError,
     RouteValidationError,
@@ -109,9 +110,7 @@ class TestRouteValidationError:
 
     def test_message_with_file_and_export_context(self) -> None:
         """RouteValidationError can include file path and export details."""
-        error = RouteValidationError(
-            "Invalid exports in /app/users/route.py: ['invalid_func']"
-        )
+        error = RouteValidationError("Invalid exports in /app/users/route.py: ['invalid_func']")
         assert "/app/users/route.py" in str(error)
         assert "invalid_func" in str(error)
 
@@ -167,6 +166,9 @@ class TestExceptionImports:
         assert ImportedDiscovery is RouteDiscoveryError
         assert ImportedValidation is RouteValidationError
 
+        # MiddlewareValidationError will be exported in Phase 4 (not yet in v0.1.0)
+        # For now, it can only be imported directly from the exceptions module
+
     def test_base_exception_importable_from_main_module(self) -> None:
         """Base exception can be imported from fastapi_filebased_routing."""
         from fastapi_filebased_routing import (
@@ -184,6 +186,9 @@ class TestExceptionImports:
             FileBasedRoutingError as DirectBase,
         )
         from fastapi_filebased_routing.exceptions import (
+            MiddlewareValidationError as DirectMiddleware,
+        )
+        from fastapi_filebased_routing.exceptions import (
             PathParseError as DirectPathParse,
         )
         from fastapi_filebased_routing.exceptions import (
@@ -195,9 +200,39 @@ class TestExceptionImports:
 
         assert DirectDuplicate is DuplicateRouteError
         assert DirectBase is FileBasedRoutingError
+        assert DirectMiddleware is MiddlewareValidationError
         assert DirectPathParse is PathParseError
         assert DirectDiscovery is RouteDiscoveryError
         assert DirectValidation is RouteValidationError
+
+
+class TestMiddlewareValidationError:
+    """Tests for middleware validation errors."""
+
+    def test_inherits_from_file_based_routing_error(self) -> None:
+        """MiddlewareValidationError inherits from FileBasedRoutingError."""
+        assert issubclass(MiddlewareValidationError, FileBasedRoutingError)
+
+    def test_can_be_raised_with_message(self) -> None:
+        """MiddlewareValidationError can be raised with a descriptive message."""
+        with pytest.raises(MiddlewareValidationError, match="invalid middleware"):
+            raise MiddlewareValidationError("invalid middleware")
+
+    def test_can_be_caught_with_base_class(self) -> None:
+        """MiddlewareValidationError can be caught as FileBasedRoutingError."""
+        try:
+            raise MiddlewareValidationError("middleware not callable")
+        except FileBasedRoutingError as e:
+            assert isinstance(e, MiddlewareValidationError)
+
+    def test_message_with_middleware_context(self) -> None:
+        """MiddlewareValidationError can include middleware details."""
+        error = MiddlewareValidationError(
+            "Invalid middleware in _middleware.py: middleware list contains non-callable at index 2"
+        )
+        assert "_middleware.py" in str(error)
+        assert "non-callable" in str(error)
+        assert "index 2" in str(error)
 
 
 class TestExceptionHierarchy:
@@ -210,6 +245,7 @@ class TestExceptionHierarchy:
             RouteDiscoveryError("test"),
             RouteValidationError("test"),
             DuplicateRouteError("test"),
+            MiddlewareValidationError("test"),
         ]
 
         for exc in exceptions_to_test:
@@ -225,7 +261,8 @@ class TestExceptionHierarchy:
         assert PathParseError is not RouteDiscoveryError
         assert RouteDiscoveryError is not RouteValidationError
         assert RouteValidationError is not DuplicateRouteError
-        assert DuplicateRouteError is not PathParseError
+        assert DuplicateRouteError is not MiddlewareValidationError
+        assert MiddlewareValidationError is not PathParseError
 
     def test_exception_type_checking(self) -> None:
         """Exception instances can be type-checked correctly."""
@@ -233,6 +270,7 @@ class TestExceptionHierarchy:
         discovery_error = RouteDiscoveryError("test")
         validation_error = RouteValidationError("test")
         duplicate_error = DuplicateRouteError("test")
+        middleware_error = MiddlewareValidationError("test")
 
         assert isinstance(path_error, PathParseError)
         assert not isinstance(path_error, RouteDiscoveryError)
@@ -244,10 +282,14 @@ class TestExceptionHierarchy:
         assert not isinstance(validation_error, DuplicateRouteError)
 
         assert isinstance(duplicate_error, DuplicateRouteError)
-        assert not isinstance(duplicate_error, PathParseError)
+        assert not isinstance(duplicate_error, MiddlewareValidationError)
+
+        assert isinstance(middleware_error, MiddlewareValidationError)
+        assert not isinstance(middleware_error, PathParseError)
 
         # All should be instances of the base class
         assert isinstance(path_error, FileBasedRoutingError)
         assert isinstance(discovery_error, FileBasedRoutingError)
         assert isinstance(validation_error, FileBasedRoutingError)
         assert isinstance(duplicate_error, FileBasedRoutingError)
+        assert isinstance(middleware_error, FileBasedRoutingError)

@@ -89,9 +89,7 @@ class TestRouteDiscoveryErrorFileNotDirectory:
 class TestPathParseErrorInvalidSyntax:
     """PathParseError when directory name has invalid syntax."""
 
-    def test_unclosed_bracket_raises_path_parse_error(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_unclosed_bracket_raises_path_parse_error(self, tmp_path: Path, create_route_file):
         """Directory with unclosed bracket raises PathParseError during scanning."""
         invalid_dir = tmp_path / "[unclosed"
         invalid_dir.mkdir()
@@ -117,9 +115,7 @@ class TestPathParseErrorInvalidSyntax:
         with pytest.raises(PathParseError, match="Invalid path segment"):
             create_router_from_path(tmp_path)
 
-    def test_path_parse_error_includes_segment_name(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_path_parse_error_includes_segment_name(self, tmp_path: Path, create_route_file):
         """Error message includes the invalid segment for easy identification."""
         bad_segment = "[bad[segment"
         invalid_dir = tmp_path / bad_segment
@@ -134,9 +130,7 @@ class TestPathParseErrorInvalidSyntax:
 
         assert bad_segment in str(exc_info.value)
 
-    def test_path_parse_error_includes_usage_hint(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_path_parse_error_includes_usage_hint(self, tmp_path: Path, create_route_file):
         """Error message includes a hint about valid segment formats."""
         invalid_dir = tmp_path / "BAD_DIR"
         invalid_dir.mkdir()
@@ -151,9 +145,7 @@ class TestPathParseErrorInvalidSyntax:
         error_message = str(exc_info.value)
         assert "[param]" in error_message or "lowercase" in error_message
 
-    def test_path_parse_error_is_subclass_of_base_error(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_path_parse_error_is_subclass_of_base_error(self, tmp_path: Path, create_route_file):
         """PathParseError is catchable via FileBasedRoutingError base class."""
         invalid_dir = tmp_path / "INVALID"
         invalid_dir.mkdir()
@@ -180,9 +172,7 @@ class TestPathParseErrorInvalidSyntax:
         with pytest.raises(PathParseError, match="Catch-all.*last"):
             create_router_from_path(tmp_path)
 
-    def test_empty_bracket_segment_raises_path_parse_error(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_empty_bracket_segment_raises_path_parse_error(self, tmp_path: Path, create_route_file):
         """Directory named '[]' (empty brackets) raises PathParseError."""
         invalid_dir = tmp_path / "[]"
         invalid_dir.mkdir()
@@ -217,9 +207,7 @@ def compute_stats():
         with pytest.raises(RouteValidationError, match="Invalid export"):
             create_router_from_path(tmp_path)
 
-    def test_invalid_export_error_includes_function_name(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_invalid_export_error_includes_function_name(self, tmp_path: Path, create_route_file):
         """Error message names the invalid function so developer knows what to fix."""
         create_route_file(
             content="""
@@ -260,9 +248,7 @@ def helper():
         error_message = str(exc_info.value)
         assert "_helper" in error_message
 
-    def test_invalid_export_error_includes_file_path(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_invalid_export_error_includes_file_path(self, tmp_path: Path, create_route_file):
         """Error message includes the file path for the offending route.py."""
         create_route_file(
             content="""
@@ -282,9 +268,7 @@ def bad_export():
         error_message = str(exc_info.value)
         assert "route.py" in error_message
 
-    def test_invalid_export_error_lists_allowed_handlers(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_invalid_export_error_lists_allowed_handlers(self, tmp_path: Path, create_route_file):
         """Error message tells developer which handler names are valid."""
         create_route_file(
             content="""
@@ -305,9 +289,7 @@ def fetch_data():
         assert "get" in error_message
         assert "post" in error_message
 
-    def test_multiple_invalid_exports_listed_in_error(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_multiple_invalid_exports_listed_in_error(self, tmp_path: Path, create_route_file):
         """Multiple invalid exports are all listed in the error message."""
         create_route_file(
             content="""
@@ -372,9 +354,7 @@ class TestDuplicateRouteError:
         with pytest.raises(DuplicateRouteError, match="Duplicate route"):
             create_router_from_path(tmp_path)
 
-    def test_duplicate_error_includes_method_and_path(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_duplicate_error_includes_method_and_path(self, tmp_path: Path, create_route_file):
         """Error message includes both the HTTP method and path that conflict."""
         create_route_file(
             content="def post(): return {}",
@@ -395,9 +375,7 @@ class TestDuplicateRouteError:
         assert "POST" in error_message
         assert "/items" in error_message
 
-    def test_duplicate_error_includes_both_file_paths(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_duplicate_error_includes_both_file_paths(self, tmp_path: Path, create_route_file):
         """Error message includes paths to both conflicting route.py files."""
         create_route_file(
             content="def get(): return {}",
@@ -419,9 +397,7 @@ class TestDuplicateRouteError:
         assert "First" in error_message
         assert "Second" in error_message
 
-    def test_duplicate_error_is_subclass_of_base_error(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_duplicate_error_is_subclass_of_base_error(self, tmp_path: Path, create_route_file):
         """DuplicateRouteError is catchable via FileBasedRoutingError base class."""
         create_route_file(
             content="def get(): return {}",
@@ -438,9 +414,7 @@ class TestDuplicateRouteError:
         with pytest.raises(FileBasedRoutingError):
             create_router_from_path(tmp_path)
 
-    def test_different_methods_same_path_do_not_conflict(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_different_methods_same_path_do_not_conflict(self, tmp_path: Path, create_route_file):
         """Same path with different methods should NOT raise DuplicateRouteError."""
         create_route_file(
             content="""
@@ -478,9 +452,7 @@ class TestRouteValidationErrorSyntaxErrors:
         with pytest.raises(RouteValidationError, match="Failed to import"):
             create_router_from_path(tmp_path)
 
-    def test_syntax_error_includes_original_error_type(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_syntax_error_includes_original_error_type(self, tmp_path: Path, create_route_file):
         """Wrapped error includes the original exception type name."""
         create_route_file(
             content="def get(\n    invalid syntax here",
@@ -494,9 +466,7 @@ class TestRouteValidationErrorSyntaxErrors:
         error_message = str(exc_info.value)
         assert "SyntaxError" in error_message
 
-    def test_syntax_error_includes_file_path(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_syntax_error_includes_file_path(self, tmp_path: Path, create_route_file):
         """Wrapped error includes the path to the offending route.py."""
         create_route_file(
             content="def get(: pass",
@@ -530,9 +500,7 @@ def get():
         with pytest.raises(RouteValidationError, match="Failed to import"):
             create_router_from_path(tmp_path)
 
-    def test_import_error_preserves_cause_chain(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_import_error_preserves_cause_chain(self, tmp_path: Path, create_route_file):
         """The original exception is preserved as __cause__ for debugging."""
         create_route_file(
             content="import nonexistent_module_xyz",
@@ -576,9 +544,7 @@ class TestErrorsRaisedAtStartup:
     which runs at startup. This class adds explicit assertions about timing.
     """
 
-    def test_invalid_export_fails_before_router_returned(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_invalid_export_fails_before_router_returned(self, tmp_path: Path, create_route_file):
         """Invalid export causes failure DURING create_router_from_path, not after."""
         create_route_file(
             content="""
@@ -600,9 +566,7 @@ def invalid_helper():
 
         assert router is None, "Router should not be created when validation fails"
 
-    def test_duplicate_route_fails_before_router_returned(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_duplicate_route_fails_before_router_returned(self, tmp_path: Path, create_route_file):
         """Duplicate route causes failure DURING create_router_from_path, not after."""
         create_route_file(
             content="def get(): return {}",
@@ -622,9 +586,7 @@ def invalid_helper():
 
         assert router is None, "Router should not be created when duplicates exist"
 
-    def test_syntax_error_fails_before_router_returned(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_syntax_error_fails_before_router_returned(self, tmp_path: Path, create_route_file):
         """Syntax error causes failure DURING create_router_from_path, not after."""
         create_route_file(
             content="def get( broken",
@@ -638,9 +600,7 @@ def invalid_helper():
 
         assert router is None, "Router should not be created when imports fail"
 
-    def test_path_parse_error_fails_before_router_returned(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_path_parse_error_fails_before_router_returned(self, tmp_path: Path, create_route_file):
         """Invalid directory name causes failure DURING create_router_from_path."""
         invalid_dir = tmp_path / "UPPERCASE"
         invalid_dir.mkdir()
@@ -688,9 +648,7 @@ class TestErrorMessageQuality:
         assert "not a directory" in message
         assert "app.py" in message
 
-    def test_invalid_segment_message_lists_valid_formats(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_invalid_segment_message_lists_valid_formats(self, tmp_path: Path, create_route_file):
         """Error for invalid segment explains valid naming formats."""
         invalid_dir = tmp_path / "Not-Valid!"
         invalid_dir.mkdir()
@@ -706,9 +664,7 @@ class TestErrorMessageQuality:
         # Should reference valid formats
         assert "[param]" in message or "lowercase" in message
 
-    def test_invalid_export_message_teaches_convention(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_invalid_export_message_teaches_convention(self, tmp_path: Path, create_route_file):
         """Error for invalid export teaches the naming convention."""
         create_route_file(
             content="""
@@ -731,9 +687,7 @@ def process_data():
         assert "_process_data" in message  # underscore prefix suggestion
         assert "HTTP" in message or "verb" in message or "get" in message
 
-    def test_duplicate_route_message_identifies_conflict(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_duplicate_route_message_identifies_conflict(self, tmp_path: Path, create_route_file):
         """Error for duplicate route identifies the exact conflict."""
         create_route_file(
             content="def delete(): return None",
@@ -758,9 +712,7 @@ def process_data():
         assert "First" in message
         assert "Second" in message
 
-    def test_syntax_error_message_includes_root_cause(
-        self, tmp_path: Path, create_route_file
-    ):
+    def test_syntax_error_message_includes_root_cause(self, tmp_path: Path, create_route_file):
         """Error for syntax failure includes the root cause error type and detail."""
         create_route_file(
             content="def get(:\n    pass",
