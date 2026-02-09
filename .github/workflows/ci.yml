@@ -10,8 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ["3.13", "3.14"]
-    name: Test (Python ${{ matrix.python }})
+        python: ["3.10", "3.14"]
+        fastapi: ["0.65.0", "latest"]
+    name: Test (Python ${{ matrix.python }}, FastAPI ${{ matrix.fastapi }})
     steps:
       - uses: actions/checkout@v4
 
@@ -22,6 +23,10 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --extra dev
+
+      - name: Pin FastAPI version
+        if: matrix.fastapi != 'latest'
+        run: uv pip install 'fastapi==${{ matrix.fastapi }}'
 
       - name: Run tests
         run: uv run pytest --tb=short -q

@@ -21,7 +21,7 @@ Define your API routes through directory structure and convention, not manual re
 
 ## 🚀 Installation & Quickstart
 
-Requires **Python 3.13+** and **FastAPI 0.115.0+**.
+Requires **Python 3.10+** and **FastAPI 0.65.0+**.
 
 ```bash
 pip install fastapi-filebased-routing
