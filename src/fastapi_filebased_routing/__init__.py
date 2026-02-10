@@ -5,7 +5,7 @@
 from fastapi_filebased_routing.core.importer import ExtractedRoute, RouteMetadata
 
 # Middleware API (NEW in v0.2.0)
-from fastapi_filebased_routing.core.middleware import RouteConfig, route
+from fastapi_filebased_routing.core.middleware import RouteConfig, dispatch, route
 from fastapi_filebased_routing.core.parser import PathSegment, SegmentType
 from fastapi_filebased_routing.core.scanner import RouteDefinition
 
@@ -24,6 +24,7 @@ __all__ = [
     # Primary API
     "create_router_from_path",
     # Middleware API (NEW in v0.2.0)
+    "dispatch",
     "route",
     "RouteConfig",
     # Core types

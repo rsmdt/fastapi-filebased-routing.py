@@ -131,6 +131,19 @@ async def my_middleware(request, call_next):
 
 Middleware must be `async`. Sync middleware raises a validation error at startup.
 
+Already have middleware written as classes (e.g. Starlette's `BaseHTTPMiddleware`)? Use `dispatch()` to adapt them without rewriting as functions:
+
+```python
+from fastapi_filebased_routing import dispatch
+
+middleware = [
+    log_request,                                 # function middleware
+    dispatch(RateLimiterMiddleware, limit=100),   # class-based middleware
+]
+```
+
+Any class that accepts `app` as its first constructor argument and exposes an async `dispatch(request, call_next)` method works — no `BaseHTTPMiddleware` import required. The class is lazily instantiated on the first request. `dispatch()` works at all three middleware layers below.
+
 ### Directory-Level Middleware
 
 Create a `_middleware.py` file in any directory. Its middleware applies to all routes in that directory and all subdirectories. Use **one** of two forms:
@@ -297,6 +310,33 @@ class get(route):
 
 # `get` is now a RouteConfig, not a class
 # `get(user_id="123")` calls the handler directly
+```
+
+### `dispatch`
+
+```python
+def dispatch(cls: type, **kwargs) -> Callable
+```
+
+Adapt a class-based middleware for use in `_middleware.py` or any middleware list.
+
+**Parameters:**
+- `cls` (type): Middleware class. Must accept `app` as its first constructor argument and expose an async `dispatch(request, call_next)` method.
+- `**kwargs`: Arguments forwarded to `cls.__init__` (after `app`).
+
+**Returns:**
+- An async middleware function compatible with the middleware pipeline.
+
+**Example:**
+
+```python
+from fastapi_filebased_routing import dispatch
+
+# No kwargs
+middleware = [dispatch(LoggingMiddleware)]
+
+# With kwargs
+middleware = [dispatch(RateLimiterMiddleware, limit=100, burst=20)]
 ```
 
 ## 💡 Why This Plugin?
