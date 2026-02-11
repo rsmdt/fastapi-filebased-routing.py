@@ -52,13 +52,14 @@ def test_core_types_exported():
 
 
 def test_exceptions_exported():
-    """All exceptions including MiddlewareValidationError are exported."""
+    """All exceptions including MiddlewareValidationError and RouteFilterError are exported."""
     from fastapi_filebased_routing import (
         DuplicateRouteError,
         FileBasedRoutingError,
         MiddlewareValidationError,
         PathParseError,
         RouteDiscoveryError,
+        RouteFilterError,
         RouteValidationError,
     )
 
@@ -67,6 +68,7 @@ def test_exceptions_exported():
     assert issubclass(RouteDiscoveryError, FileBasedRoutingError)
     assert issubclass(RouteValidationError, FileBasedRoutingError)
     assert issubclass(MiddlewareValidationError, FileBasedRoutingError)
+    assert issubclass(RouteFilterError, FileBasedRoutingError)
 
 
 def test_middleware_validation_error_is_new():
@@ -83,12 +85,13 @@ def test_middleware_validation_error_is_new():
 
 
 def test_all_contains_new_exports():
-    """__all__ includes new v0.2.0 exports."""
+    """__all__ includes new v0.2.0 and v1.2.0 exports."""
     import fastapi_filebased_routing
 
     assert "route" in fastapi_filebased_routing.__all__
     assert "RouteConfig" in fastapi_filebased_routing.__all__
     assert "MiddlewareValidationError" in fastapi_filebased_routing.__all__
+    assert "RouteFilterError" in fastapi_filebased_routing.__all__
 
 
 def test_all_contains_existing_exports():
@@ -113,11 +116,11 @@ def test_all_contains_existing_exports():
     assert "RouteValidationError" in fastapi_filebased_routing.__all__
 
 
-def test_version_is_1_0_1():
-    """__version__ is bumped to 1.0.1."""
+def test_version_is_1_1_0():
+    """__version__ is bumped to 1.1.0."""
     import fastapi_filebased_routing
 
-    assert fastapi_filebased_routing.__version__ == "1.0.1"
+    assert fastapi_filebased_routing.__version__ == "1.1.0"
 
 
 def test_route_import_path():
@@ -147,3 +150,14 @@ def test_middleware_validation_error_import_path():
 
     # Should be the same class
     assert MiddlewareValidationError is ExcMiddlewareValidationError
+
+
+def test_route_filter_error_import_path():
+    """RouteFilterError can be imported from root package."""
+    from fastapi_filebased_routing import RouteFilterError
+    from fastapi_filebased_routing.exceptions import (
+        RouteFilterError as ExcRouteFilterError,
+    )
+
+    # Should be the same class
+    assert RouteFilterError is ExcRouteFilterError

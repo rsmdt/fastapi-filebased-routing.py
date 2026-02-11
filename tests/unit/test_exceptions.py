@@ -8,6 +8,7 @@ from fastapi_filebased_routing.exceptions import (
     MiddlewareValidationError,
     PathParseError,
     RouteDiscoveryError,
+    RouteFilterError,
     RouteValidationError,
 )
 
@@ -235,6 +236,34 @@ class TestMiddlewareValidationError:
         assert "index 2" in str(error)
 
 
+class TestRouteFilterError:
+    """Tests for route filter errors."""
+
+    def test_inherits_from_file_based_routing_error(self) -> None:
+        """RouteFilterError inherits from FileBasedRoutingError."""
+        assert issubclass(RouteFilterError, FileBasedRoutingError)
+
+    def test_can_be_raised_with_message(self) -> None:
+        """RouteFilterError can be raised with a descriptive message."""
+        with pytest.raises(RouteFilterError, match="invalid filter"):
+            raise RouteFilterError("invalid filter")
+
+    def test_can_be_caught_with_base_class(self) -> None:
+        """RouteFilterError can be caught as FileBasedRoutingError."""
+        try:
+            raise RouteFilterError("both include and exclude provided")
+        except FileBasedRoutingError as e:
+            assert isinstance(e, RouteFilterError)
+
+    def test_message_with_filter_context(self) -> None:
+        """RouteFilterError can include filter configuration details."""
+        error = RouteFilterError(
+            "Cannot specify both include and exclude filters: include=['users'], exclude=['admin']"
+        )
+        assert "include" in str(error)
+        assert "exclude" in str(error)
+
+
 class TestExceptionHierarchy:
     """Tests for exception hierarchy behavior."""
 
@@ -246,6 +275,7 @@ class TestExceptionHierarchy:
             RouteValidationError("test"),
             DuplicateRouteError("test"),
             MiddlewareValidationError("test"),
+            RouteFilterError("test"),
         ]
 
         for exc in exceptions_to_test:
@@ -262,7 +292,8 @@ class TestExceptionHierarchy:
         assert RouteDiscoveryError is not RouteValidationError
         assert RouteValidationError is not DuplicateRouteError
         assert DuplicateRouteError is not MiddlewareValidationError
-        assert MiddlewareValidationError is not PathParseError
+        assert MiddlewareValidationError is not RouteFilterError
+        assert RouteFilterError is not PathParseError
 
     def test_exception_type_checking(self) -> None:
         """Exception instances can be type-checked correctly."""
@@ -271,6 +302,7 @@ class TestExceptionHierarchy:
         validation_error = RouteValidationError("test")
         duplicate_error = DuplicateRouteError("test")
         middleware_error = MiddlewareValidationError("test")
+        filter_error = RouteFilterError("test")
 
         assert isinstance(path_error, PathParseError)
         assert not isinstance(path_error, RouteDiscoveryError)
@@ -285,7 +317,10 @@ class TestExceptionHierarchy:
         assert not isinstance(duplicate_error, MiddlewareValidationError)
 
         assert isinstance(middleware_error, MiddlewareValidationError)
-        assert not isinstance(middleware_error, PathParseError)
+        assert not isinstance(middleware_error, RouteFilterError)
+
+        assert isinstance(filter_error, RouteFilterError)
+        assert not isinstance(filter_error, PathParseError)
 
         # All should be instances of the base class
         assert isinstance(path_error, FileBasedRoutingError)
@@ -293,3 +328,4 @@ class TestExceptionHierarchy:
         assert isinstance(validation_error, FileBasedRoutingError)
         assert isinstance(duplicate_error, FileBasedRoutingError)
         assert isinstance(middleware_error, FileBasedRoutingError)
+        assert isinstance(filter_error, FileBasedRoutingError)

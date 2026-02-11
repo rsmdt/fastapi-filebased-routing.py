@@ -16,6 +16,7 @@ from fastapi_filebased_routing.exceptions import (
     MiddlewareValidationError,
     PathParseError,
     RouteDiscoveryError,
+    RouteFilterError,
     RouteValidationError,
 )
 from fastapi_filebased_routing.fastapi.router import create_router_from_path
@@ -39,6 +40,7 @@ __all__ = [
     "MiddlewareValidationError",
     "PathParseError",
     "RouteDiscoveryError",
+    "RouteFilterError",
     "RouteValidationError",
 ]
 

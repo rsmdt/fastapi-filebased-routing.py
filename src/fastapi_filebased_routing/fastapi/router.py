@@ -13,6 +13,12 @@ from typing import Any
 from fastapi import APIRouter
 from fastapi.routing import APIRoute
 
+from fastapi_filebased_routing.core.filter import (
+    compute_active_directories,
+    filter_middleware_files,
+    filter_routes,
+    validate_filter_params,
+)
 from fastapi_filebased_routing.core.importer import _import_module_from_file, load_route
 from fastapi_filebased_routing.core.middleware import (
     RouteConfig,
@@ -38,6 +44,8 @@ def create_router_from_path(
     base_path: str | Path,
     *,
     prefix: str = "",
+    include: Sequence[str] | None = None,
+    exclude: Sequence[str] | None = None,
 ) -> APIRouter:
     """Create a FastAPI APIRouter from a directory of route.py files.
 
@@ -47,6 +55,10 @@ def create_router_from_path(
     Args:
         base_path: Root directory containing route.py files.
         prefix: Optional URL prefix for all discovered routes.
+        include: Allowlist of route patterns. Only matching routes are loaded.
+            Patterns can be bare names (segment-level) or glob patterns.
+        exclude: Denylist of route patterns. Matching routes are skipped.
+            Patterns can be bare names (segment-level) or glob patterns.
 
     Returns:
         A FastAPI APIRouter with all discovered routes registered.
@@ -56,6 +68,7 @@ def create_router_from_path(
         RouteValidationError: If a route file has invalid exports or parameters.
         DuplicateRouteError: If two route files resolve to the same path+method.
         PathParseError: If a directory name has invalid syntax.
+        RouteFilterError: If both include and exclude are provided.
 
     Example:
         from fastapi import FastAPI
@@ -63,11 +76,23 @@ def create_router_from_path(
 
         app = FastAPI()
         app.include_router(create_router_from_path("app"))
+
+        # DMZ deployment: only public routes
+        app.include_router(create_router_from_path("app", include=["(public)"]))
+
+        # Internal: everything except public
+        app.include_router(create_router_from_path("app", exclude=["(public)"]))
     """
+    # Fail fast if both include and exclude are provided
+    validate_filter_params(include, exclude)
+
     base = Path(base_path).resolve()
 
     # Scan for all route definitions
     route_defs = scan_routes(base)
+
+    # Filter routes before any imports
+    route_defs = filter_routes(route_defs, base_path=base, include=include, exclude=exclude)
 
     logger.info(
         "Discovered route files",
@@ -76,6 +101,11 @@ def create_router_from_path(
 
     # Scan for middleware files
     middleware_files = scan_middleware(base)
+
+    # Filter middleware to only directories that are ancestors of surviving routes
+    if include or exclude:
+        active_dirs = compute_active_directories(route_defs, base)
+        middleware_files = filter_middleware_files(middleware_files, active_dirs)
 
     # Import and validate all middleware files
     dir_middleware = _load_directory_middleware(middleware_files, base)

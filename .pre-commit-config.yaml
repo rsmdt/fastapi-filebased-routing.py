@@ -22,3 +22,12 @@ repos:
         types: [python]
         files: ^src/
         pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        entry: uv run pytest --tb=short -q
+        language: system
+        types: [python]
+        files: ^(src|tests)/
+        pass_filenames: false
+        stages: [pre-commit]

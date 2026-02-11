@@ -74,6 +74,21 @@ class DuplicateRouteError(FileBasedRoutingError):
     """
 
 
+class RouteFilterError(FileBasedRoutingError):
+    """Raised when route filter configuration is invalid.
+
+    This exception is raised when:
+        - Both include and exclude filters are provided simultaneously
+        - Filter patterns are malformed
+
+    Example:
+        RouteFilterError(
+            "Cannot specify both include and exclude filters: "
+            "include=['users'], exclude=['admin']"
+        )
+    """
+
+
 class MiddlewareValidationError(FileBasedRoutingError):
     """Raised when middleware configuration is invalid.
 

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from fastapi_filebased_routing.exceptions import (
     DuplicateRouteError,
     RouteDiscoveryError,
+    RouteFilterError,
 )
 from fastapi_filebased_routing.fastapi.router import (
     DEFAULT_STATUS_CODES,
@@ -1428,3 +1429,150 @@ def get(request: Request):
         response = client.get("/order")
         # Middleware should execute in order: mw1 -> mw2 -> mw3 -> handler
         assert response.json() == {"order": ["mw1_before", "mw2_before", "mw3_before", "handler"]}
+
+
+class TestRouteFiltering:
+    """Test include/exclude route filtering in create_router_from_path."""
+
+    def test_include_filters_routes(self, tmp_path: Path, create_route_file):
+        """Only included routes get registered."""
+        create_route_file(
+            content='def get():\n    return {"route": "users"}\n',
+            parent_dir=tmp_path,
+            subdir="users",
+        )
+        create_route_file(
+            content='def get():\n    return {"route": "admin"}\n',
+            parent_dir=tmp_path,
+            subdir="admin",
+        )
+
+        router = create_router_from_path(tmp_path, include=["users"])
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        assert client.get("/users").status_code == 200
+        assert client.get("/users").json() == {"route": "users"}
+        assert client.get("/admin").status_code == 404
+
+    def test_exclude_filters_routes(self, tmp_path: Path, create_route_file):
+        """Excluded routes return 404."""
+        create_route_file(
+            content='def get():\n    return {"route": "users"}\n',
+            parent_dir=tmp_path,
+            subdir="users",
+        )
+        create_route_file(
+            content='def get():\n    return {"route": "admin"}\n',
+            parent_dir=tmp_path,
+            subdir="admin",
+        )
+
+        router = create_router_from_path(tmp_path, exclude=["admin"])
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        assert client.get("/users").status_code == 200
+        assert client.get("/admin").status_code == 404
+
+    def test_both_raises_error(self, tmp_path: Path, create_route_file):
+        """Providing both include and exclude raises RouteFilterError."""
+        create_route_file(
+            content="def get():\n    return {}\n",
+            parent_dir=tmp_path,
+            subdir="users",
+        )
+
+        with pytest.raises(RouteFilterError, match="Cannot specify both"):
+            create_router_from_path(tmp_path, include=["users"], exclude=["admin"])
+
+    def test_none_means_no_filter(self, tmp_path: Path, create_route_file):
+        """Default None params mean no filtering (backward compatible)."""
+        create_route_file(
+            content='def get():\n    return {"route": "users"}\n',
+            parent_dir=tmp_path,
+            subdir="users",
+        )
+        create_route_file(
+            content='def get():\n    return {"route": "admin"}\n',
+            parent_dir=tmp_path,
+            subdir="admin",
+        )
+
+        router = create_router_from_path(tmp_path)
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        assert client.get("/users").status_code == 200
+        assert client.get("/admin").status_code == 200
+
+    def test_middleware_not_imported_for_excluded_dirs(self, tmp_path: Path, create_route_file):
+        """Middleware in excluded directories is not loaded."""
+        # Create admin dir with middleware that would fail if imported
+        admin_dir = tmp_path / "admin"
+        admin_dir.mkdir()
+        (admin_dir / "_middleware.py").write_text(
+            "async def middleware(request, call_next):\n"
+            "    response = await call_next(request)\n"
+            '    response.headers["X-Admin"] = "true"\n'
+            "    return response\n"
+        )
+        create_route_file(
+            content='def get():\n    return {"route": "admin"}\n',
+            parent_dir=tmp_path,
+            subdir="admin",
+        )
+        create_route_file(
+            content='def get():\n    return {"route": "users"}\n',
+            parent_dir=tmp_path,
+            subdir="users",
+        )
+
+        router = create_router_from_path(tmp_path, exclude=["admin"])
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/users")
+        assert response.status_code == 200
+        # Admin middleware should NOT have run
+        assert "X-Admin" not in response.headers
+
+    def test_ancestor_middleware_applies_to_included_routes(
+        self, tmp_path: Path, create_route_file
+    ):
+        """Root/parent middleware still applies to included child routes."""
+        # Root middleware
+        (tmp_path / "_middleware.py").write_text(
+            "async def middleware(request, call_next):\n"
+            "    response = await call_next(request)\n"
+            '    response.headers["X-Root"] = "true"\n'
+            "    return response\n"
+        )
+        create_route_file(
+            content='def get():\n    return {"route": "users"}\n',
+            parent_dir=tmp_path,
+            subdir="users",
+        )
+        create_route_file(
+            content='def get():\n    return {"route": "admin"}\n',
+            parent_dir=tmp_path,
+            subdir="admin",
+        )
+
+        router = create_router_from_path(tmp_path, include=["users"])
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/users")
+        assert response.status_code == 200
+        assert response.headers["X-Root"] == "true"
