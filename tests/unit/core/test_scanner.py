@@ -196,6 +196,22 @@ class TestScanRoutes:
         assert len(routes) == 1
         assert routes[0].path == "/valid"
 
+    def test_does_not_skip_routes_when_base_lives_under_hidden_ancestor(self, tmp_path: Path):
+        """Hidden directories in the absolute path leading to base must not
+        cause every route to be filtered out. Reproduces the case where the
+        scan root lives inside a git worktree (.worktree/main), a hidden
+        venv parent (.venvs/myproj), or any similar dotfile-prefixed
+        ancestor that's incidental to the project layout.
+        """
+        nested = tmp_path / ".worktree" / "main"
+        (nested / "users").mkdir(parents=True)
+        (nested / "users" / "route.py").write_text("async def get(): pass")
+
+        routes = scan_routes(nested)
+
+        assert len(routes) == 1
+        assert routes[0].path == "/users"
+
     def test_empty_directory_no_routes(self, tmp_path: Path):
         """Empty directory returns empty list."""
         routes = scan_routes(tmp_path)
@@ -452,6 +468,22 @@ class TestMiddlewareDiscovery:
 
         assert len(files) == 1
         assert files[0].directory == tmp_path / "api"
+
+    def test_does_not_skip_middleware_when_base_lives_under_hidden_ancestor(self, tmp_path: Path):
+        """Companion to the route-scan regression: a hidden ancestor in the
+        absolute path leading to base must not cause middleware files to
+        be dropped.
+        """
+        from fastapi_filebased_routing.core.scanner import scan_middleware
+
+        nested = tmp_path / ".worktree" / "main"
+        (nested / "api").mkdir(parents=True)
+        (nested / "api" / "_middleware.py").write_text("middleware = []")
+
+        files = scan_middleware(nested)
+
+        assert len(files) == 1
+        assert files[0].directory == nested / "api"
 
     def test_rejects_symlink_outside_base_path_middleware(self, tmp_path: Path):
         """Symlinks pointing outside base path are rejected for middleware."""

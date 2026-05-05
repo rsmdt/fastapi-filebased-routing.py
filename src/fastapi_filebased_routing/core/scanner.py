@@ -91,7 +91,11 @@ def _scan_directory(base_path: Path | str, glob_pattern: str) -> Iterator[tuple[
     for found_file in base.rglob(glob_pattern):
         if "__pycache__" in found_file.parts:
             continue
-        if any(part.startswith(".") for part in found_file.parts):
+        # Filter dotfile components only under base — anything in the
+        # ancestors of base is incidental layout (e.g. a worktree at
+        # .worktree/main, a project under .venvs/) and shouldn't reject
+        # the user's own routes.
+        if any(part.startswith(".") for part in found_file.relative_to(base).parts):
             continue
         resolved_file = found_file.resolve()
         if not _is_path_within(resolved_file, base):
