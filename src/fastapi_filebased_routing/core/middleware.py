@@ -4,6 +4,7 @@ Provides RouteConfig, the route metaclass, and middleware chain assembly.
 Zero framework dependencies — works with any ASGI-compatible middleware.
 """
 
+import asyncio
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -79,6 +80,32 @@ def normalize_middleware(
         f"{source + ': ' if source else ''}middleware must be a list or callable, "
         f"got {type(middleware_attr).__name__}"
     )
+
+
+def validate_middleware_entries(
+    middleware: Sequence[Callable[..., Any]],
+    *,
+    source: str,
+    error_class: type[Exception] = RouteValidationError,
+) -> None:
+    """Validate that all middleware entries are async callables.
+
+    Args:
+        middleware: Sequence of middleware to validate.
+        source: Human-readable source for error messages (e.g., file path).
+        error_class: Exception type to raise on validation failure.
+
+    Raises:
+        error_class: If any entry is not callable or not async.
+    """
+    for i, mw in enumerate(middleware):
+        if not callable(mw):
+            raise error_class(f"Non-callable middleware at index {i} in {source}")
+        if not asyncio.iscoroutinefunction(mw):
+            name = getattr(mw, "__name__", "unknown")
+            raise error_class(
+                f"Middleware at index {i} in {source} must be async, got sync function {name}"
+            )
 
 
 class _RouteMeta(type):

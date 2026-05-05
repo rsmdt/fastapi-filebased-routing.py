@@ -4,7 +4,6 @@ Dynamically imports route.py modules and extracts HTTP method handlers.
 Validates that only allowed exports (HTTP verbs) are present.
 """
 
-import asyncio
 import importlib.util
 import inspect
 import re
@@ -15,7 +14,11 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-from fastapi_filebased_routing.core.middleware import RouteConfig, normalize_middleware
+from fastapi_filebased_routing.core.middleware import (
+    RouteConfig,
+    normalize_middleware,
+    validate_middleware_entries,
+)
 from fastapi_filebased_routing.exceptions import RouteValidationError
 
 # HTTP methods and WebSocket that can be exported from route.py files
@@ -318,21 +321,10 @@ def extract_handlers(module: ModuleType, file_path: Path) -> ExtractedRoute:  # 
     )
 
     # Validate file-level middleware entries are async callables
-    for i, mw in enumerate(file_middleware):
-        if not callable(mw):
-            raise RouteValidationError(f"Non-callable middleware at index {i} in {file_path}")
-        if not asyncio.iscoroutinefunction(mw):
-            raise RouteValidationError(
-                f"File-level middleware at index {i} in {file_path} must be async"
-            )
+    validate_middleware_entries(file_middleware, source=str(file_path))
 
-    # Collect names that should be skipped during handler validation
-    # (functions that are part of the middleware list)
-    middleware_names = set()
-    if isinstance(file_middleware, (list, tuple)):
-        for mw in file_middleware:
-            if hasattr(mw, "__name__"):
-                middleware_names.add(mw.__name__)
+    # Collect names of middleware functions to skip during handler validation
+    middleware_names = {mw.__name__ for mw in file_middleware if hasattr(mw, "__name__")}
 
     for name in dir(module):
         # Skip dunder attributes

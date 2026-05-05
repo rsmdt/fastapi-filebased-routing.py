@@ -4,6 +4,7 @@ Walks the directory tree to discover route.py files and extract
 route definitions with their paths.
 """
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -64,6 +65,40 @@ class MiddlewareFile:
     depth: int
 
 
+def _scan_directory(base_path: Path | str, glob_pattern: str) -> Iterator[tuple[Path, Path]]:
+    """Walk a directory tree and yield valid files matching a glob pattern.
+
+    Resolves the base path, validates it exists and is a directory, then
+    yields files that pass security checks (__pycache__, hidden dirs, symlinks).
+
+    Args:
+        base_path: Root directory to scan.
+        glob_pattern: Glob pattern to match (e.g., "route.py", "_middleware.py").
+
+    Yields:
+        Tuples of (file_path, resolved_base) for each valid file found.
+
+    Raises:
+        RouteDiscoveryError: If base_path doesn't exist or isn't a directory.
+    """
+    base = Path(base_path).resolve()
+
+    if not base.exists():
+        raise RouteDiscoveryError(f"Base path does not exist: {base}")
+    if not base.is_dir():
+        raise RouteDiscoveryError(f"Base path is not a directory: {base}")
+
+    for found_file in base.rglob(glob_pattern):
+        if "__pycache__" in found_file.parts:
+            continue
+        if any(part.startswith(".") for part in found_file.parts):
+            continue
+        resolved_file = found_file.resolve()
+        if not _is_path_within(resolved_file, base):
+            continue
+        yield found_file, base
+
+
 def scan_routes(base_path: Path | str) -> list[RouteDefinition]:
     """Scan a directory tree for route.py files and generate route definitions.
 
@@ -87,39 +122,12 @@ def scan_routes(base_path: Path | str) -> list[RouteDefinition]:
         for route in routes:
             print(f"{route.path} -> {route.file_path}")
     """
-    base = Path(base_path).resolve()
-
-    if not base.exists():
-        raise RouteDiscoveryError(f"Base path does not exist: {base}")
-    if not base.is_dir():
-        raise RouteDiscoveryError(f"Base path is not a directory: {base}")
-
     routes: list[RouteDefinition] = []
 
-    for route_file in base.rglob("route.py"):
-        # Skip __pycache__ directories
-        if "__pycache__" in route_file.parts:
-            continue
-
-        # Skip hidden directories (starting with .)
-        if any(part.startswith(".") for part in route_file.parts):
-            continue
-
-        # Security: Resolve symlinks and verify file is within base path
-        resolved_file = route_file.resolve()
-        if not _is_path_within(resolved_file, base):
-            continue
-
-        # Get path relative to base
+    for route_file, base in _scan_directory(base_path, "route.py"):
         relative_dir = route_file.parent.relative_to(base)
-        path_parts = list(relative_dir.parts)
-
-        # Parse directory names into segments
-        segments = parse_path(path_parts)
-
-        # Handle optional parameters by generating route variants
-        route_variants = _generate_route_variants(segments, route_file)
-        routes.extend(route_variants)
+        segments = parse_path(list(relative_dir.parts))
+        routes.extend(_generate_route_variants(segments, route_file))
 
     return routes
 
@@ -237,38 +245,14 @@ def scan_middleware(base_path: Path | str) -> list[MiddlewareFile]:
         for mw_file in files:
             print(f"{mw_file.depth}: {mw_file.file_path}")
     """
-    base = Path(base_path).resolve()
-
-    if not base.exists():
-        raise RouteDiscoveryError(f"Base path does not exist: {base}")
-    if not base.is_dir():
-        raise RouteDiscoveryError(f"Base path is not a directory: {base}")
-
     middleware_files: list[MiddlewareFile] = []
 
-    for mw_file in base.rglob("_middleware.py"):
-        # Skip __pycache__ directories
-        if "__pycache__" in mw_file.parts:
-            continue
-
-        # Skip hidden directories (starting with .)
-        if any(part.startswith(".") for part in mw_file.parts):
-            continue
-
-        # Security: Resolve symlinks and verify file is within base path
-        resolved_file = mw_file.resolve()
-        if not _is_path_within(resolved_file, base):
-            continue
-
-        # Get directory containing the middleware file
+    for mw_file, base in _scan_directory(base_path, "_middleware.py"):
         directory = mw_file.parent
-
-        # Calculate depth relative to base
         try:
             relative_dir = directory.relative_to(base)
             depth = len(relative_dir.parts)
         except ValueError:
-            # Should not happen due to _is_path_within check, but handle defensively
             continue
 
         middleware_files.append(
@@ -279,5 +263,4 @@ def scan_middleware(base_path: Path | str) -> list[MiddlewareFile]:
             )
         )
 
-    # Sort by depth (shallowest first)
     return sorted(middleware_files, key=lambda mf: mf.depth)

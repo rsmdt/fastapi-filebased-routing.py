@@ -4,7 +4,6 @@ Composes scanner, parser, and importer to create a complete
 FastAPI router from a directory structure.
 """
 
-import asyncio
 import logging
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -24,6 +23,7 @@ from fastapi_filebased_routing.core.middleware import (
     RouteConfig,
     build_middleware_chain,
     normalize_middleware,
+    validate_middleware_entries,
 )
 from fastapi_filebased_routing.core.scanner import MiddlewareFile, scan_middleware, scan_routes
 from fastapi_filebased_routing.exceptions import (
@@ -145,7 +145,133 @@ def create_router_from_path(
     return router
 
 
-def _register_route_handlers(  # noqa: C901
+def _resolve_handler_config(
+    handler: Any,
+    method: str,
+    default_tags: list[str],
+    default_summary: str | None,
+    default_deprecated: bool,
+) -> tuple[
+    Callable[..., Any], tuple[Callable[..., Any], ...], list[str], str | None, bool, int | None
+]:
+    """Resolve a handler into its function, middleware, and metadata.
+
+    Unwraps RouteConfig instances and applies metadata defaults.
+
+    Args:
+        handler: The handler function or RouteConfig.
+        method: HTTP method name (for default status code lookup).
+        default_tags: Default tags from route metadata.
+        default_summary: Default summary from route metadata.
+        default_deprecated: Default deprecated flag from route metadata.
+
+    Returns:
+        Tuple of (handler_fn, handler_mw, tags, summary, deprecated, status_code).
+    """
+    handler_mw: tuple[Callable[..., Any], ...] = ()
+    handler_fn = handler
+    resolved_tags = default_tags
+    resolved_summary = default_summary
+    resolved_deprecated = default_deprecated
+    resolved_status_code = DEFAULT_STATUS_CODES.get(method)
+
+    if isinstance(handler, RouteConfig):
+        handler_mw = tuple(handler.middleware)
+        handler_fn = handler.handler
+        if handler.tags is not None:
+            resolved_tags = list(handler.tags)
+        if handler.summary is not None:
+            resolved_summary = handler.summary
+        resolved_deprecated = handler.deprecated
+        if handler.status_code is not None:
+            resolved_status_code = handler.status_code
+
+    return (
+        handler_fn,
+        handler_mw,
+        resolved_tags,
+        resolved_summary,
+        resolved_deprecated,
+        resolved_status_code,
+    )
+
+
+def _register_websocket_handler(
+    router: APIRouter,
+    path: str,
+    handler_fn: Callable[..., Any],
+    all_middleware: tuple[Callable[..., Any], ...],
+) -> None:
+    """Register a WebSocket handler, warning if middleware would be skipped.
+
+    Args:
+        router: The APIRouter to register on.
+        path: The URL path for the WebSocket route.
+        handler_fn: The WebSocket handler function.
+        all_middleware: Combined middleware that would apply (for warning only).
+    """
+    if all_middleware:
+        logger.warning(
+            "WebSocket handler has applicable middleware that will be skipped. "
+            "WebSocket middleware is not yet supported.",
+            extra={
+                "path": path,
+                "skipped_middleware_count": len(all_middleware),
+            },
+        )
+    router.websocket(path)(handler_fn)
+
+
+def _register_http_handler(
+    router: APIRouter,
+    path: str,
+    method: str,
+    handler_fn: Callable[..., Any],
+    full_middleware: tuple[Callable[..., Any], ...],
+    tags: list[str],
+    summary: str | None,
+    deprecated: bool,
+    status_code: int | None,
+) -> None:
+    """Register an HTTP handler with optional middleware wrapping.
+
+    Args:
+        router: The APIRouter to register on.
+        path: The URL path for the route.
+        method: HTTP method name (lowercase).
+        handler_fn: The handler function.
+        full_middleware: Combined middleware stack (dir + file + handler level).
+        tags: OpenAPI tags for the route.
+        summary: OpenAPI summary.
+        deprecated: Whether this route is deprecated.
+        status_code: Optional HTTP status code override.
+    """
+    route_class = None
+    if full_middleware:
+        route_class = _make_middleware_route(full_middleware)
+        logger.debug(
+            "Created middleware route class",
+            extra={
+                "method": method.upper(),
+                "path": path,
+                "middleware_count": len(full_middleware),
+            },
+        )
+
+    _add_route(
+        router=router,
+        path=path,
+        method=method,
+        handler=handler_fn,
+        tags=tags,
+        summary=summary,
+        deprecated=deprecated,
+        status_code=status_code,
+        route_class=route_class,
+    )
+
+
+def _register_route_handlers(
     router: APIRouter,
     sorted_routes: list[Any],
     base_path: Path,
@@ -171,29 +297,19 @@ def _register_route_handlers(  # noqa: C901
     registered: dict[tuple[str, str], Path] = {}
 
     for route_def in sorted_routes:
-        # Load handlers from the route file
         extracted = load_route(route_def.file_path, base_path=base_path)
-
-        # Skip route files with no handlers
         if not extracted.handlers:
             continue
 
-        # Collect applicable directory middleware for this route
-        route_dir = route_def.file_path.parent
         applicable_dir_mw = _collect_directory_middleware(
-            route_dir=route_dir,
+            route_dir=route_def.file_path.parent,
             base_path=base_path,
             dir_middleware=dir_middleware,
         )
-
-        # Determine tags from metadata or derive from path
         tags = extracted.metadata.tags or _derive_tags(route_def.path)
 
-        # Register each handler
         for method, handler in extracted.handlers.items():
             route_key = (route_def.path, method.upper())
-
-            # Check for duplicates
             if route_key in registered:
                 raise DuplicateRouteError(
                     f"Duplicate route: {method.upper()} {route_def.path}\n"
@@ -202,76 +318,36 @@ def _register_route_handlers(  # noqa: C901
                 )
             registered[route_key] = route_def.file_path
 
-            # Extract handler function and handler-level middleware
-            handler_mw: tuple[Callable[..., Any], ...] = ()
-            handler_fn = handler
-            handler_tags = tags
-            handler_summary = extracted.metadata.summary
-            handler_deprecated = extracted.metadata.deprecated
-            handler_status_code = DEFAULT_STATUS_CODES.get(method)
+            (
+                handler_fn,
+                handler_mw,
+                handler_tags,
+                handler_summary,
+                handler_deprecated,
+                handler_status_code,
+            ) = _resolve_handler_config(
+                handler,
+                method,
+                tags,
+                extracted.metadata.summary,
+                extracted.metadata.deprecated,
+            )
 
-            # Check if handler is a RouteConfig
-            if isinstance(handler, RouteConfig):
-                handler_mw = tuple(handler.middleware)
-                handler_fn = handler.handler
-
-                # Override metadata if RouteConfig provides non-None values
-                if handler.tags is not None:
-                    handler_tags = list(handler.tags)
-                if handler.summary is not None:
-                    handler_summary = handler.summary
-                handler_deprecated = handler.deprecated
-                if handler.status_code is not None:
-                    handler_status_code = handler.status_code
-
-            # Handle WebSocket vs HTTP methods differently
             if method == "websocket":
-                # Warn if middleware would apply but gets skipped
-                applicable_mw = (*applicable_dir_mw, *extracted.file_middleware, *handler_mw)
-                if applicable_mw:
-                    logger.warning(
-                        "WebSocket handler has applicable middleware that will be skipped. "
-                        "WebSocket middleware is not yet supported.",
-                        extra={
-                            "path": route_def.path,
-                            "skipped_middleware_count": len(applicable_mw),
-                        },
-                    )
-                # WebSocket registration
-                router.websocket(route_def.path)(handler_fn)
+                all_mw = (*applicable_dir_mw, *extracted.file_middleware, *handler_mw)
+                _register_websocket_handler(router, route_def.path, handler_fn, all_mw)
             else:
-                # Assemble full middleware stack
-                # Order: directory (root→leaf) + file-level + handler-level
-                full_middleware = (
-                    *applicable_dir_mw,
-                    *extracted.file_middleware,
-                    *handler_mw,
-                )
-
-                # Create custom APIRoute subclass if middleware exists
-                route_class = None
-                if full_middleware:
-                    route_class = _make_middleware_route(full_middleware)
-                    logger.debug(
-                        "Created middleware route class",
-                        extra={
-                            "method": method.upper(),
-                            "path": route_def.path,
-                            "middleware_count": len(full_middleware),
-                        },
-                    )
-
-                # Add route to the router
-                _add_route(
-                    router=router,
-                    path=route_def.path,
-                    method=method,
-                    handler=handler_fn,
-                    tags=handler_tags,
-                    summary=handler_summary,
-                    deprecated=handler_deprecated,
-                    status_code=handler_status_code,
-                    route_class=route_class,
+                full_middleware = (*applicable_dir_mw, *extracted.file_middleware, *handler_mw)
+                _register_http_handler(
+                    router,
+                    route_def.path,
+                    method,
+                    handler_fn,
+                    full_middleware,
+                    handler_tags,
+                    handler_summary,
+                    handler_deprecated,
+                    handler_status_code,
                 )
 
             logger.debug(
@@ -446,16 +522,11 @@ def _load_directory_middleware(
             ) from exc
 
         # Validate each middleware
-        for i, mw in enumerate(middleware_list):
-            if not callable(mw):
-                raise MiddlewareValidationError(
-                    f"Non-callable middleware at index {i} in {mw_file.file_path}"
-                )
-            if not asyncio.iscoroutinefunction(mw):
-                raise MiddlewareValidationError(
-                    f"Middleware at index {i} in {mw_file.file_path} must be async, "
-                    f"got sync function {mw.__name__}"
-                )
+        validate_middleware_entries(
+            middleware_list,
+            source=str(mw_file.file_path),
+            error_class=MiddlewareValidationError,
+        )
 
         result[mw_file.directory] = tuple(middleware_list)
 
