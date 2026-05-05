@@ -5,7 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2026-02-08
+## [1.2.1]
+
+### Fixed
+
+- Scanner no longer rejects routes when the project lives under a dotfile-prefixed ancestor (e.g. running from a git worktree at `.worktree/main`, or a project nested under `.venvs/`). Dotfile filtering now applies only to components under the scan base, not to incidental ancestors of the absolute path.
+
+## [1.2.0]
+
+### Added
+
+- **`include` and `exclude` parameters** on `create_router_from_path()` for route-level filtering, supporting both glob patterns (via `fnmatch`) and bare segment names. Bare names match any segment in the path, making route groups transparent.
+- **`core/filter.py`** module — filters routes and middleware before any imports, so excluded code never enters memory. Enables module monolith deployment topologies (e.g. DMZ instances loading only public routes, admin code never imported).
+- Middleware files (`_middleware.py`) are filtered alongside their routes — only ancestors of surviving routes are retained.
+- **`RouteFilterError`** exception, raised when both `include` and `exclude` are supplied (mutually exclusive).
+
+### Changed
+
+- Public API surface expanded to export `RouteFilterError` and the filtering parameters.
+
+## [1.1.0]
+
+### Added
+
+- **`dispatch()` adapter** for class-based middleware — allows reusing existing `BaseHTTPMiddleware`-style classes in `_middleware.py` files without rewriting them as functions.
+- Public export: `from fastapi_filebased_routing import dispatch`.
+- Documentation and examples for the dispatch pattern in README.
+
+## [1.0.2]
+
+### Changed
+
+- Widened version compatibility: now supports **Python 3.10+** (previously 3.11+) and **FastAPI 0.65.0+** (previously >=0.100).
+- CI matrix expanded to validate the widened compatibility range (Python 3.10/3.14 × FastAPI 0.65.0/latest).
+
+## [1.0.1]
+
+### Changed
+
+- Switched build backend from `hatchling` to **`uv_build`** for tighter integration with the `uv` toolchain.
+- Updated repository URLs to `github.com/rsmdt/fastapi-filebased-routing.py`.
+
+## [1.0.0]
+
+First stable release. The public API is now covered by semantic versioning guarantees.
+
+### Added
+
+- GitHub Actions: CI workflow and tag-triggered PyPI publish workflow.
+- Concurrency integration tests verifying request isolation, auth short-circuit, POST body isolation, and error routing under 50 concurrent requests with random delays.
+- Pre-commit hooks for `ruff check`, `ruff format`, and `mypy`.
+
+### Changed
+
+- README restructured for clarity and compactness (438 lines → 97 lines).
+- API stabilized — backward-compatibility guarantees apply from this release forward.
+
+## [0.2.0]
 
 ### Added
 
@@ -32,7 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - N/A
 
-## [0.1.0] - 2025-10-01
+## [0.1.0]
 
 ### Added
 
@@ -56,6 +112,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type-safe with PEP 561 marker
 - 98%+ test coverage across all modules
 
-[Unreleased]: https://github.com/rsmdt/fastapi-filebased-routing.py/compare/v0.2.0...main
+[1.2.1]: https://github.com/rsmdt/fastapi-filebased-routing.py/releases/tag/v1.2.1
+[1.2.0]: https://github.com/rsmdt/fastapi-filebased-routing.py/releases/tag/v1.2.0
+[1.1.0]: https://github.com/rsmdt/fastapi-filebased-routing.py/releases/tag/v1.1.0
+[1.0.2]: https://github.com/rsmdt/fastapi-filebased-routing.py/releases/tag/v1.0.2
+[1.0.1]: https://github.com/rsmdt/fastapi-filebased-routing.py/releases/tag/v1.0.1
+[1.0.0]: https://github.com/rsmdt/fastapi-filebased-routing.py/releases/tag/v1.0.0
 [0.2.0]: https://github.com/rsmdt/fastapi-filebased-routing.py/releases/tag/v0.2.0
 [0.1.0]: https://github.com/rsmdt/fastapi-filebased-routing.py/releases/tag/v0.1.0
