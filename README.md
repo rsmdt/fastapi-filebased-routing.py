@@ -86,7 +86,7 @@ Each `route.py` exports handlers. Supported HTTP methods: `get`, `post`, `put`, 
 
 ```python
 # app/api/users/route.py
-from fastapi_filebased_routing import route
+from fastapi_filebased_routing import Route
 
 # Module-level metadata (applies to all handlers in this file)
 TAGS = ["users"]                         # auto-derived from first path segment if omitted
@@ -102,13 +102,14 @@ async def get():
     return {"users": []}
 
 # Configured handler — per-handler control over metadata and middleware
-class post(route):
+class POST(Route):
     status_code = 200                    # override convention-based 201
     tags = ["admin"]                     # override module-level TAGS
     summary = "Create a user"            # override module-level SUMMARY
     deprecated = True                    # override module-level DEPRECATED
     middleware = [require_role("admin")]  # or use inline: async def middleware(request, call_next): ...
 
+    @staticmethod
     async def handler(name: str):
         return {"name": name}
 ```
@@ -194,13 +195,13 @@ async def post(name: str):
 
 ### Handler-Level Middleware
 
-`class handler(route):` blocks support a `middleware` attribute — as a list or a single inline function:
+`class VERB(Route):` blocks support a `middleware` attribute — as a list or a single inline function:
 
 ```python
 # app/api/orders/route.py
-from fastapi_filebased_routing import route
+from fastapi_filebased_routing import Route
 
-class post(route):
+class POST(Route):
     async def middleware(request, call_next):
         if not request.headers.get("X-Idempotency-Key"):
             from fastapi.responses import JSONResponse
@@ -210,6 +211,7 @@ class post(route):
             )
         return await call_next(request)
 
+    @staticmethod
     async def handler(order: dict):
         """Create order. Requires idempotency key."""
         return {"order_id": "abc-123", **order}
@@ -293,23 +295,24 @@ app.include_router(create_router_from_path("app/public"))
 app.include_router(create_router_from_path("app/admin", prefix="/admin"))
 ```
 
-### `route`
+### `Route`
 
-Base class for handler-level middleware and metadata configuration. Uses a metaclass that returns a `RouteConfig` instead of a class.
+Base class for handler-level middleware and metadata configuration. Subclass it with an uppercase HTTP verb name (`GET`, `POST`, …); `__init_subclass__` validates the body at import time and stores the built `RouteConfig` on the subclass as `_config`. The subclass stays a real class, so type checkers and IDEs see it honestly.
 
 ```python
-from fastapi_filebased_routing import route
+from fastapi_filebased_routing import Route
 
-class get(route):
+class GET(Route):
     middleware = [auth_required]
     tags = ["users"]
     summary = "Get user details"
 
+    @staticmethod
     async def handler(user_id: str):
         return {"user_id": user_id}
 
-# `get` is now a RouteConfig, not a class
-# `get(user_id="123")` calls the handler directly
+# `GET` is a real class; `GET._config` is its RouteConfig.
+# Use @staticmethod on `handler` to keep it lint-clean (it takes no `self`).
 ```
 
 ### `dispatch`

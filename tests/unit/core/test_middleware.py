@@ -185,47 +185,49 @@ def test_route_config_with_middleware_tuple() -> None:
     assert config.middleware == (mw1, mw2)
 
 
-# === _RouteMeta metaclass and route base class tests ===
+# === Route base class and __init_subclass__ tests ===
 
 
-def test_route_base_class_creation() -> None:
-    """The route base class itself is created normally (no metaclass interception)."""
-    from fastapi_filebased_routing.core.middleware import route
+def test_route_base_class_is_a_normal_class() -> None:
+    """The Route base class itself is an ordinary class with no metaclass magic."""
+    from fastapi_filebased_routing.core.middleware import Route
 
-    # route class should exist as a normal class
-    assert isinstance(route, type)
-    assert route.__name__ == "route"
+    assert isinstance(Route, type)
+    assert Route.__name__ == "Route"
+    assert type(Route) is type  # no custom metaclass
 
 
-def test_simple_handler_returns_route_config() -> None:
-    """class get(route): with handler returns RouteConfig instance."""
-    from fastapi_filebased_routing.core.middleware import route
+def test_subclass_is_a_real_class_with_config() -> None:
+    """class GET(Route): stays a real class and exposes a RouteConfig as _config."""
+    from fastapi_filebased_routing.core.middleware import Route
 
-    class get(route):  # noqa: N801
-        async def handler(user_id: str) -> dict:  # noqa: N805
+    class GET(Route):
+        @staticmethod
+        async def handler(user_id: str) -> dict:
             return {"user_id": user_id}
 
-    # get should be a RouteConfig, not a class
-    assert isinstance(get, RouteConfig)
-    assert not isinstance(get, type)
+    # GET remains a class (unlike the old metaclass, which returned a RouteConfig)
+    assert isinstance(GET, type)
+    assert issubclass(GET, Route)
+    assert isinstance(GET._config, RouteConfig)
 
 
-def test_route_config_is_callable_via_metaclass() -> None:
-    """RouteConfig created via metaclass delegates calls to the wrapped handler."""
-    from fastapi_filebased_routing.core.middleware import route
+def test_config_is_callable_and_delegates_to_handler() -> None:
+    """The built RouteConfig delegates calls to the wrapped handler."""
+    from fastapi_filebased_routing.core.middleware import Route
 
-    class get(route):  # noqa: N801
-        async def handler(user_id: str) -> dict:  # noqa: N805
+    class GET(Route):
+        @staticmethod
+        async def handler(user_id: str) -> dict:
             return {"user_id": user_id}
 
-    # Calling get(...) should delegate to handler
-    result = asyncio.run(get(user_id="123"))
+    result = asyncio.run(GET._config(user_id="123"))
     assert result == {"user_id": "123"}
 
 
 def test_middleware_list_normalized_to_tuple() -> None:
     """Middleware list is normalized to tuple."""
-    from fastapi_filebased_routing.core.middleware import route
+    from fastapi_filebased_routing.core.middleware import Route
 
     async def auth(request: Any) -> None:
         pass
@@ -233,159 +235,168 @@ def test_middleware_list_normalized_to_tuple() -> None:
     async def rate_limit(request: Any) -> None:
         pass
 
-    class get(route):  # noqa: N801
+    class GET(Route):
         middleware = [auth, rate_limit]
 
+        @staticmethod
         async def handler() -> dict:
             return {}
 
-    assert get.middleware == (auth, rate_limit)
-    assert isinstance(get.middleware, tuple)
+    assert GET._config.middleware == (auth, rate_limit)
+    assert isinstance(GET._config.middleware, tuple)
 
 
 def test_single_callable_middleware_normalized_to_tuple() -> None:
     """Single callable middleware is normalized to tuple of one."""
-    from fastapi_filebased_routing.core.middleware import route
+    from fastapi_filebased_routing.core.middleware import Route
 
     async def auth(request: Any) -> None:
         pass
 
-    class get(route):  # noqa: N801
+    class GET(Route):
         middleware = auth
 
+        @staticmethod
         async def handler() -> dict:
             return {}
 
-    assert get.middleware == (auth,)
-    assert isinstance(get.middleware, tuple)
+    assert GET._config.middleware == (auth,)
+    assert isinstance(GET._config.middleware, tuple)
 
 
 def test_none_middleware_normalized_to_empty_tuple() -> None:
     """None middleware is normalized to empty tuple."""
-    from fastapi_filebased_routing.core.middleware import route
+    from fastapi_filebased_routing.core.middleware import Route
 
-    class get(route):  # noqa: N801
+    class GET(Route):
         middleware = None
 
+        @staticmethod
         async def handler() -> dict:
             return {}
 
-    assert get.middleware == ()
-    assert isinstance(get.middleware, tuple)
+    assert GET._config.middleware == ()
+    assert isinstance(GET._config.middleware, tuple)
 
 
 def test_no_middleware_defaults_to_empty_tuple() -> None:
     """Missing middleware defaults to empty tuple."""
-    from fastapi_filebased_routing.core.middleware import route
+    from fastapi_filebased_routing.core.middleware import Route
 
-    class get(route):  # noqa: N801
+    class GET(Route):
+        @staticmethod
         async def handler() -> dict:
             return {}
 
-    assert get.middleware == ()
-    assert isinstance(get.middleware, tuple)
+    assert GET._config.middleware == ()
+    assert isinstance(GET._config.middleware, tuple)
 
 
 def test_missing_handler_raises_validation_error() -> None:
-    """class get(route): without handler raises RouteValidationError."""
-    from fastapi_filebased_routing.core.middleware import route
+    """class GET(Route): without handler raises RouteValidationError."""
+    from fastapi_filebased_routing.core.middleware import Route
     from fastapi_filebased_routing.exceptions import RouteValidationError
 
     with pytest.raises(
         RouteValidationError,
-        match=r"class get\(route\) must define an async def handler\(\.\.\.\) function",
+        match=r"class GET\(Route\) must define an async def handler\(\.\.\.\) function",
     ):
 
-        class get(route):  # noqa: N801
+        class GET(Route):
             middleware = []
 
 
 def test_non_callable_handler_raises_validation_error() -> None:
-    """class get(route): with non-callable handler raises RouteValidationError."""
-    from fastapi_filebased_routing.core.middleware import route
+    """class GET(Route): with non-callable handler raises RouteValidationError."""
+    from fastapi_filebased_routing.core.middleware import Route
     from fastapi_filebased_routing.exceptions import RouteValidationError
 
     with pytest.raises(
         RouteValidationError,
-        match=r"class get\(route\): handler must be a callable, got str",
+        match=r"class GET\(Route\): handler must be a callable, got str",
     ):
 
-        class get(route):  # noqa: N801
+        class GET(Route):
             handler = "not a function"
 
 
 def test_invalid_middleware_type_raises_validation_error() -> None:
-    """class get(route): with invalid middleware type raises RouteValidationError."""
-    from fastapi_filebased_routing.core.middleware import route
+    """class GET(Route): with invalid middleware type raises RouteValidationError."""
+    from fastapi_filebased_routing.core.middleware import Route
     from fastapi_filebased_routing.exceptions import RouteValidationError
 
     with pytest.raises(
         RouteValidationError,
-        match=r"class get\(route\): middleware must be a list or callable, got str",
+        match=r"class GET\(Route\): middleware must be a list or callable, got str",
     ):
 
-        class get(route):  # noqa: N801
+        class GET(Route):
             middleware = "invalid"
 
+            @staticmethod
             async def handler() -> dict:
                 return {}
 
 
 def test_metadata_extraction_tags() -> None:
     """Metadata is extracted: tags."""
-    from fastapi_filebased_routing.core.middleware import route
+    from fastapi_filebased_routing.core.middleware import Route
 
-    class get(route):  # noqa: N801
+    class GET(Route):
         tags = ["users", "admin"]
 
+        @staticmethod
         async def handler() -> dict:
             return {}
 
-    assert get.tags == ("users", "admin")
+    assert GET._config.tags == ("users", "admin")
 
 
 def test_metadata_extraction_summary() -> None:
     """Metadata is extracted: summary."""
-    from fastapi_filebased_routing.core.middleware import route
+    from fastapi_filebased_routing.core.middleware import Route
 
-    class get(route):  # noqa: N801
+    class GET(Route):
         summary = "Get user details"
 
+        @staticmethod
         async def handler() -> dict:
             return {}
 
-    assert get.summary == "Get user details"
+    assert GET._config.summary == "Get user details"
 
 
 def test_metadata_extraction_deprecated() -> None:
     """Metadata is extracted: deprecated."""
-    from fastapi_filebased_routing.core.middleware import route
+    from fastapi_filebased_routing.core.middleware import Route
 
-    class get(route):  # noqa: N801
+    class GET(Route):
         deprecated = True
 
+        @staticmethod
         async def handler() -> dict:
             return {}
 
-    assert get.deprecated is True
+    assert GET._config.deprecated is True
 
 
 def test_metadata_extraction_status_code() -> None:
     """Metadata is extracted: status_code."""
-    from fastapi_filebased_routing.core.middleware import route
+    from fastapi_filebased_routing.core.middleware import Route
 
-    class get(route):  # noqa: N801
+    class GET(Route):
         status_code = 201
 
+        @staticmethod
         async def handler() -> dict:
             return {}
 
-    assert get.status_code == 201
+    assert GET._config.status_code == 201
 
 
 def test_full_example_with_all_features() -> None:
     """Full example: handler + middleware + metadata."""
-    from fastapi_filebased_routing.core.middleware import route
+    from fastapi_filebased_routing.core.middleware import Route
 
     async def auth(request: Any) -> None:
         pass
@@ -393,62 +404,68 @@ def test_full_example_with_all_features() -> None:
     async def rate_limit(request: Any) -> None:
         pass
 
-    class get(route):  # noqa: N801
+    class GET(Route):
         middleware = [auth, rate_limit]
         tags = ["users"]
         summary = "Get user"
         deprecated = False
         status_code = 200
 
-        async def handler(user_id: str) -> dict:  # noqa: N805
+        @staticmethod
+        async def handler(user_id: str) -> dict:
             return {"user_id": user_id}
 
-    assert isinstance(get, RouteConfig)
-    assert get.middleware == (auth, rate_limit)
-    assert get.tags == ("users",)
-    assert get.summary == "Get user"
-    assert get.deprecated is False
-    assert get.status_code == 200
+    config = GET._config
+    assert isinstance(config, RouteConfig)
+    assert config.middleware == (auth, rate_limit)
+    assert config.tags == ("users",)
+    assert config.summary == "Get user"
+    assert config.deprecated is False
+    assert config.status_code == 200
 
 
 def test_tuple_middleware_preserved() -> None:
     """Middleware as tuple is preserved."""
-    from fastapi_filebased_routing.core.middleware import route
+    from fastapi_filebased_routing.core.middleware import Route
 
     async def auth(request: Any) -> None:
         pass
 
-    class get(route):  # noqa: N801
+    class GET(Route):
         middleware = (auth,)
 
+        @staticmethod
         async def handler() -> dict:
             return {}
 
-    assert get.middleware == (auth,)
-    assert isinstance(get.middleware, tuple)
+    assert GET._config.middleware == (auth,)
+    assert isinstance(GET._config.middleware, tuple)
 
 
 def test_deprecated_defaults_to_false() -> None:
     """deprecated defaults to False if not specified."""
-    from fastapi_filebased_routing.core.middleware import route
+    from fastapi_filebased_routing.core.middleware import Route
 
-    class get(route):  # noqa: N801
+    class GET(Route):
+        @staticmethod
         async def handler() -> dict:
             return {}
 
-    assert get.deprecated is False
+    assert GET._config.deprecated is False
 
 
 def test_handler_metadata_preserved() -> None:
-    """Handler metadata is preserved on RouteConfig."""
-    from fastapi_filebased_routing.core.middleware import route
+    """Handler metadata is preserved on the RouteConfig."""
+    from fastapi_filebased_routing.core.middleware import Route
 
-    class get(route):  # noqa: N801
-        async def handler(user_id: str) -> dict:  # noqa: N805
+    class GET(Route):
+        @staticmethod
+        async def handler(user_id: str) -> dict:
             """Retrieve user details."""
             return {"user_id": user_id}
 
-    assert get.__name__ == "handler"
-    assert get.__doc__ == "Retrieve user details."
-    assert get.__wrapped__ is get.handler
-    assert "user_id" in get.__annotations__
+    config = GET._config
+    assert config.__name__ == "handler"
+    assert config.__doc__ == "Retrieve user details."
+    assert config.__wrapped__ is config.handler
+    assert "user_id" in config.__annotations__

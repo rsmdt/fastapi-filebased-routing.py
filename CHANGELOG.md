@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0]
+
+### Changed (BREAKING)
+
+- Replaced the `route` metaclass with a plain `Route` base class. Declare handlers as `class VERB(Route):` (uppercase HTTP verb); the subclass stays a real class and is now correctly typed.
+
+### Removed
+
+- The `route` symbol and `_RouteMeta` metaclass. Use `Route` instead; other exports are unchanged.
+
+### Migration
+
+- Change the import from `route` to `Route` and rename `class <verb>(route):` to `class <VERB>(Route):`. Optionally mark `handler` as `@staticmethod`.
+
 ## [1.2.1]
 
 ### Fixed

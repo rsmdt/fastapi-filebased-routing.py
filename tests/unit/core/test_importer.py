@@ -556,9 +556,9 @@ class TestRouteConfigDetection:
         """RouteConfig objects are detected and placed in handlers dict."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import route
+from fastapi_filebased_routing.core.middleware import Route
 
-class get(route):
+class GET(Route):
     async def handler():
         return {"hello": "world"}
 """)
@@ -576,13 +576,13 @@ class get(route):
         """RouteConfig with name in ALLOWED_HANDLERS is accepted."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import route
+from fastapi_filebased_routing.core.middleware import Route
 
-class post(route):
+class POST(Route):
     async def handler():
         return {}
 
-class delete(route):
+class DELETE(Route):
     async def handler():
         return {}
 """)
@@ -598,9 +598,9 @@ class delete(route):
         """RouteConfig with name not in ALLOWED_HANDLERS is rejected."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import route
+from fastapi_filebased_routing.core.middleware import Route
 
-class invalid_handler(route):
+class invalid_handler(Route):
     async def handler():
         return {}
 """)
@@ -610,25 +610,26 @@ class invalid_handler(route):
         with pytest.raises(RouteValidationError, match="Invalid export"):
             extract_handlers(module, route_file)
 
-    def test_route_config_detected_before_callable_check(self, tmp_path: Path):
-        """RouteConfig detected BEFORE generic callable check."""
+    def test_route_subclass_detected_before_constant_skip(self, tmp_path: Path):
+        """All-caps verb names are detected as Route subclasses, not skipped as constants."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import route, RouteConfig
+from fastapi_filebased_routing.core.middleware import Route, RouteConfig
 
-class get(route):
+class GET(Route):
     async def handler():
         return {"config": True}
 
-# This should confirm RouteConfig is checked first
-assert isinstance(get, RouteConfig)
-assert callable(get)
+# GET stays a real class; its _config is a RouteConfig
+assert isinstance(GET, type)
+assert isinstance(GET._config, RouteConfig)
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
         result = extract_handlers(module, route_file)
 
-        # Should extract the RouteConfig, not reject it
+        # "GET".isupper() is True, but it is detected as a Route subclass before
+        # the uppercase-constant skip, and registered under its lowercased name.
         assert "get" in result.handlers
         from fastapi_filebased_routing.core.middleware import RouteConfig
 
@@ -661,12 +662,12 @@ async def post():
         """Mix of RouteConfig and plain functions extracted correctly."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import route
+from fastapi_filebased_routing.core.middleware import Route
 
 async def get():
     return {"plain": True}
 
-class post(route):
+class POST(Route):
     async def handler():
         return {"config": True}
 
@@ -694,9 +695,9 @@ async def delete():
         """RouteConfig preserves the handler name (e.g., 'get')."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import route
+from fastapi_filebased_routing.core.middleware import Route
 
-class get(route):
+class GET(Route):
     async def handler():
         return {}
 """)
@@ -713,29 +714,38 @@ class get(route):
         # The __name__ should be "handler" (the inner function)
         assert config.__name__ == "handler"
 
-    def test_all_existing_importer_tests_still_pass(self, tmp_path: Path):
-        """Existing importer behavior unchanged by RouteConfig addition."""
-        # This is a meta-test to confirm we haven't broken anything
-        # If any existing tests fail, this test documents the regression
+    def test_websocket_route_subclass_async_handler_accepted(self, tmp_path: Path):
+        """class WEBSOCKET(Route): with an async handler is accepted."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-TAGS = ["test"]
-SUMMARY = "Test route"
+from fastapi_filebased_routing.core.middleware import Route
 
-async def get():
-    return "hello"
-
-def _helper():
-    pass
+class WEBSOCKET(Route):
+    async def handler(ws):
+        return None
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
         result = extract_handlers(module, route_file)
 
-        assert "get" in result.handlers
-        assert "_helper" not in result.handlers
-        assert result.metadata.tags == ["test"]
-        assert result.metadata.summary == "Test route"
+        assert "websocket" in result.handlers
+
+    def test_websocket_route_subclass_sync_handler_rejected(self, tmp_path: Path):
+        """class WEBSOCKET(Route): with a sync handler raises RouteValidationError."""
+        route_file = tmp_path / "route.py"
+        route_file.write_text("""
+from fastapi_filebased_routing.core.middleware import Route
+
+class WEBSOCKET(Route):
+    @staticmethod
+    def handler(ws):
+        return None
+""")
+
+        module = import_route_module(route_file, base_path=tmp_path)
+
+        with pytest.raises(RouteValidationError, match="WebSocket handler must be async"):
+            extract_handlers(module, route_file)
 
 
 class TestSecurityValidation:

@@ -9,23 +9,24 @@ def test_primary_api_export():
 
 
 def test_middleware_api_exports():
-    """route and RouteConfig are exported (NEW in v0.2.0)."""
-    from fastapi_filebased_routing import RouteConfig, route
+    """Route and RouteConfig are exported (NEW in v0.2.0)."""
+    from fastapi_filebased_routing import Route, RouteConfig
 
-    assert route is not None
+    assert Route is not None
     assert RouteConfig is not None
 
 
-def test_route_is_metaclass_base():
-    """route is the base class for configured handlers."""
-    from fastapi_filebased_routing import route
+def test_route_is_plain_base_class():
+    """Route is an ordinary base class for configured handlers (no metaclass)."""
+    from fastapi_filebased_routing import Route
 
-    # route should have _RouteMeta as its metaclass
-    assert type(route).__name__ == "_RouteMeta"
+    # Route is a normal class — no custom metaclass intercepts subclassing
+    assert isinstance(Route, type)
+    assert type(Route) is type
 
 
 def test_route_config_is_dataclass():
-    """RouteConfig is the dataclass returned by route metaclass."""
+    """RouteConfig is the dataclass built from a Route subclass body."""
     from fastapi_filebased_routing import RouteConfig
 
     # RouteConfig should be a dataclass
@@ -88,7 +89,7 @@ def test_all_contains_new_exports():
     """__all__ includes new v0.2.0 and v1.2.0 exports."""
     import fastapi_filebased_routing
 
-    assert "route" in fastapi_filebased_routing.__all__
+    assert "Route" in fastapi_filebased_routing.__all__
     assert "RouteConfig" in fastapi_filebased_routing.__all__
     assert "MiddlewareValidationError" in fastapi_filebased_routing.__all__
     assert "RouteFilterError" in fastapi_filebased_routing.__all__
@@ -116,20 +117,20 @@ def test_all_contains_existing_exports():
     assert "RouteValidationError" in fastapi_filebased_routing.__all__
 
 
-def test_version_is_1_2_1():
-    """__version__ is bumped to 1.2.1."""
+def test_version_is_2_0_0():
+    """__version__ is bumped to 2.0.0 (Route class replaces the route metaclass)."""
     import fastapi_filebased_routing
 
-    assert fastapi_filebased_routing.__version__ == "1.2.1"
+    assert fastapi_filebased_routing.__version__ == "2.0.0"
 
 
 def test_route_import_path():
-    """route can be imported from root package (not just core.middleware)."""
-    from fastapi_filebased_routing import route
-    from fastapi_filebased_routing.core.middleware import route as core_route
+    """Route can be imported from root package (not just core.middleware)."""
+    from fastapi_filebased_routing import Route
+    from fastapi_filebased_routing.core.middleware import Route as CoreRoute
 
     # Should be the same class
-    assert route is core_route
+    assert Route is CoreRoute
 
 
 def test_route_config_import_path():

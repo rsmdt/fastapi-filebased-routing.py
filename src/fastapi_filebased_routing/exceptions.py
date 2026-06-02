@@ -95,7 +95,7 @@ class MiddlewareValidationError(FileBasedRoutingError):
     This exception is raised when:
         - A _middleware.py file fails to import
         - A middleware attribute contains non-callable values
-        - A class handler(route): block is misconfigured
+        - A class VERB(Route): block is misconfigured
         - Middleware is not async
 
     Example:

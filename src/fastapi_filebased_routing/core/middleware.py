@@ -1,6 +1,6 @@
 """Middleware primitives for file-based routing.
 
-Provides RouteConfig, the route metaclass, and middleware chain assembly.
+Provides RouteConfig, the Route base class, and middleware chain assembly.
 Zero framework dependencies — works with any ASGI-compatible middleware.
 """
 
@@ -16,7 +16,8 @@ from fastapi_filebased_routing.exceptions import RouteValidationError
 class RouteConfig:
     """A configured route handler with middleware and metadata.
 
-    Created by the _RouteMeta metaclass when a class inherits from route.
+    Built by ``Route.__init_subclass__`` when a class inherits from Route,
+    and stored on the subclass as ``_config``.
     Callable — delegates to the wrapped handler function.
 
     Note: slots=True is omitted to allow setting special attributes
@@ -65,7 +66,7 @@ def normalize_middleware(
 
     Args:
         middleware_attr: The middleware value to normalize.
-        source: Context for error messages (e.g., "class get(route)").
+        source: Context for error messages (e.g., "class GET(Route)").
 
     Raises:
         RouteValidationError: If middleware_attr is not a valid type.
@@ -108,88 +109,74 @@ def validate_middleware_entries(
             )
 
 
-class _RouteMeta(type):
-    """Metaclass that intercepts class body and returns RouteConfig.
+class Route:
+    """Base class for configured route handlers.
 
-    When a class inherits from `route`, this metaclass:
-    1. Extracts `handler` function from the class body
-    2. Extracts `middleware` (list or single callable) from the class body
-    3. Extracts metadata (tags, summary, deprecated, status_code)
-    4. Returns a RouteConfig instance instead of a class
+    Subclass with an uppercase HTTP verb name to define a handler with
+    middleware and metadata. ``__init_subclass__`` validates the class body
+    at definition time and stores the resulting :class:`RouteConfig` on the
+    subclass as ``_config``. Unlike the old metaclass, the subclass remains a
+    real class, so static type checkers and IDEs see it honestly.
 
-    This means `class get(route): ...` produces a RouteConfig, not a class.
+    Recognized class attributes:
+        handler: The route handler (async def). Required. Use ``@staticmethod``
+            to keep it lint-clean, since it takes no ``self``.
+        middleware: A single callable or list/tuple of middleware.
+        tags, summary, deprecated, status_code: OpenAPI metadata overrides.
+
+    Example:
+        from fastapi_filebased_routing import Route
+
+        class GET(Route):
+            middleware = [auth_required, rate_limit(100)]
+            tags = ["users"]
+
+            @staticmethod
+            async def handler(user_id: str) -> dict:
+                return {"user_id": user_id}
+
+        # `GET` is a real class; `GET._config` is its RouteConfig.
     """
 
-    def __new__(
-        mcs,
-        name: str,
-        bases: tuple[type, ...],
-        namespace: dict[str, Any],
-    ) -> Any:  # Returns RouteConfig, not type — intentional
-        """Create a new class or return RouteConfig based on inheritance."""
-        # The `route` base class itself — create normally
-        if not bases:
-            return super().__new__(mcs, name, bases, namespace)
+    _config: "RouteConfig"
 
-        # Subclass of route → intercept and return RouteConfig
-        handler = namespace.get("handler")
-        middleware_attr = namespace.get("middleware")
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Validate the subclass body and build its RouteConfig."""
+        super().__init_subclass__(**kwargs)
+
+        handler = getattr(cls, "handler", None)
 
         # Validate: handler is required
         if handler is None:
             raise RouteValidationError(
-                f"class {name}(route) must define an async def handler(...) function"
+                f"class {cls.__name__}(Route) must define an async def handler(...) function"
             )
 
         # Validate: handler must be callable
         if not callable(handler):
             raise RouteValidationError(
-                f"class {name}(route): handler must be a callable, got {type(handler).__name__}"
+                f"class {cls.__name__}(Route): handler must be a callable, "
+                f"got {type(handler).__name__}"
             )
 
         # Normalize middleware
         middleware = normalize_middleware(
-            middleware_attr,
-            source=f"class {name}(route)",
+            getattr(cls, "middleware", None),
+            source=f"class {cls.__name__}(Route)",
         )
 
         # Extract metadata
-        raw_tags = namespace.get("tags")
+        raw_tags = getattr(cls, "tags", None)
         tags = tuple(raw_tags) if raw_tags else None
-        summary = namespace.get("summary")
-        deprecated = namespace.get("deprecated", False)
-        status_code = namespace.get("status_code")
 
-        return RouteConfig(
+        cls._config = RouteConfig(
             handler=handler,
             middleware=middleware,
             tags=tags,
-            summary=summary,
-            deprecated=bool(deprecated),
-            status_code=status_code,
+            summary=getattr(cls, "summary", None),
+            deprecated=bool(getattr(cls, "deprecated", False)),
+            status_code=getattr(cls, "status_code", None),
         )
-
-
-class route(metaclass=_RouteMeta):  # noqa: N801
-    """Base class for configured route handlers.
-
-    Use `class handler_name(route):` to define a handler with middleware
-    and metadata. The metaclass intercepts the class body and returns a
-    RouteConfig instead of a class.
-
-    Example:
-        from fastapi_filebased_routing import route
-
-        class get(route):
-            middleware = [auth_required, rate_limit(100)]
-            tags = ["users"]
-
-            async def handler(user_id: str) -> dict:
-                return {"user_id": user_id}
-
-        # `get` is now a RouteConfig, not a class
-        # `get(user_id="123")` calls the handler directly
-    """
 
 
 def build_middleware_chain(

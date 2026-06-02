@@ -309,15 +309,15 @@ middleware = [not_async]
 
 
 class TestRouteHandlerMissingHandler:
-    """class handler(route): without handler raises RouteValidationError at import time."""
+    """class VERB(Route): without handler raises RouteValidationError at import time."""
 
     def test_route_class_without_handler_raises_at_import(self, tmp_path: Path):
-        """class get(route): without handler function raises at module import time."""
+        """class GET(Route): without handler function raises at module import time."""
         # Create route.py with route class but no handler
         route_content = """
-from fastapi_filebased_routing import route
+from fastapi_filebased_routing import Route
 
-class get(route):
+class GET(Route):
     middleware = []
     # No handler defined!
 """
@@ -334,9 +334,9 @@ class get(route):
         """Error message includes the class name (HTTP method) for debugging."""
         # Create route.py with named class but no handler
         route_content = """
-from fastapi_filebased_routing import route
+from fastapi_filebased_routing import Route
 
-class post(route):
+class POST(Route):
     tags = ["users"]
     # Missing handler!
 """
@@ -348,16 +348,16 @@ class post(route):
             create_router_from_path(tmp_path)
 
         error_message = str(exc_info.value)
-        assert "post" in error_message
+        assert "POST" in error_message
         assert "handler" in error_message
 
     def test_route_class_with_non_callable_handler_raises_at_import(self, tmp_path: Path):
-        """class get(route): with handler = "string" raises at module import time."""
+        """class GET(Route): with handler = "string" raises at module import time."""
         # Create route.py with invalid handler
         route_content = """
-from fastapi_filebased_routing import route
+from fastapi_filebased_routing import Route
 
-class delete(route):
+class DELETE(Route):
     handler = "not a function"
 """
         route_dir = tmp_path / "items"
@@ -508,9 +508,9 @@ import nonexistent_module
     def test_missing_handler_fails_before_router_returned(self, tmp_path: Path):
         """Missing handler in route class causes failure DURING create_router_from_path."""
         route_content = """
-from fastapi_filebased_routing import route
+from fastapi_filebased_routing import Route
 
-class get(route):
+class GET(Route):
     pass  # No handler!
 """
         route_dir = tmp_path / "test"
@@ -597,9 +597,9 @@ import nonexistent_package_xyz
     def test_missing_handler_error_message_is_actionable(self, tmp_path: Path):
         """Error for missing handler tells developer what's needed."""
         route_content = """
-from fastapi_filebased_routing import route
+from fastapi_filebased_routing import Route
 
-class patch(route):
+class PATCH(Route):
     tags = ["items"]
     # No handler!
 """
@@ -612,6 +612,6 @@ class patch(route):
 
         message = str(exc_info.value)
         # Should mention the class name
-        assert "patch" in message
+        assert "PATCH" in message
         # Should explain what's needed
         assert "handler" in message

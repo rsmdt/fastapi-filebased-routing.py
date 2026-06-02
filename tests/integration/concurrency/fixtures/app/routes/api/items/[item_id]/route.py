@@ -5,7 +5,7 @@ import random
 
 from fastapi import Request
 
-from fastapi_filebased_routing.core.middleware import route
+from fastapi_filebased_routing.core.middleware import Route
 
 
 async def _handler_middleware(request, call_next):  # type: ignore[no-untyped-def]
@@ -13,7 +13,7 @@ async def _handler_middleware(request, call_next):  # type: ignore[no-untyped-de
     return await call_next(request)
 
 
-class get(route):  # noqa: N801
+class GET(Route):
     middleware = [_handler_middleware]
 
     async def handler(request: Request, item_id: str):  # type: ignore[no-untyped-def]  # noqa: N805

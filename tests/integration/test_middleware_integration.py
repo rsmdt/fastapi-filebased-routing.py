@@ -230,20 +230,20 @@ class TestFileLevelMiddleware:
 
 
 class TestHandlerLevelMiddleware:
-    """Verify handler-level middleware via `class handler(route):` blocks."""
+    """Verify handler-level middleware via `class VERB(Route):` blocks."""
 
     def test_handler_middleware_applies_to_single_handler(self, tmp_path: Path) -> None:
         route_dir = tmp_path / "resources"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            "from fastapi_filebased_routing.core.middleware import route\n"
+            "from fastapi_filebased_routing.core.middleware import Route\n"
             "\n"
             "async def _handler_mw(request, call_next):\n"
             "    response = await call_next(request)\n"
             '    response.headers["X-Handler-Middleware"] = "applied"\n'
             "    return response\n"
             "\n"
-            "class post(route):\n"
+            "class POST(Route):\n"
             "    middleware = [_handler_mw]\n"
             "\n"
             "    async def handler():\n"
@@ -273,7 +273,7 @@ class TestHandlerLevelMiddleware:
         route_dir = tmp_path / "items"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            "from fastapi_filebased_routing.core.middleware import route\n"
+            "from fastapi_filebased_routing.core.middleware import Route\n"
             "\n"
             "async def _file_mw(request, call_next):\n"
             "    response = await call_next(request)\n"
@@ -289,7 +289,7 @@ class TestHandlerLevelMiddleware:
             "\n"
             "middleware = [_file_mw]\n"
             "\n"
-            "class post(route):\n"
+            "class POST(Route):\n"
             "    middleware = [_handler_mw]\n"
             "\n"
             "    async def handler():\n"
@@ -341,7 +341,7 @@ class TestFullExecutionOrder:
         users_dir = api_dir / "users"
         users_dir.mkdir()
         (users_dir / "route.py").write_text(
-            "from fastapi_filebased_routing.core.middleware import route\n"
+            "from fastapi_filebased_routing.core.middleware import Route\n"
             "\n"
             "async def _file_mw(request, call_next):\n"
             "    response = await call_next(request)\n"
@@ -357,7 +357,7 @@ class TestFullExecutionOrder:
             "\n"
             "middleware = [_file_mw]\n"
             "\n"
-            "class post(route):\n"
+            "class POST(Route):\n"
             "    middleware = [_handler_mw]\n"
             "\n"
             "    async def handler():\n"
@@ -467,7 +467,7 @@ class TestMixedHandlerTypes:
         route_dir = tmp_path / "mixed"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            "from fastapi_filebased_routing.core.middleware import route\n"
+            "from fastapi_filebased_routing.core.middleware import Route\n"
             "\n"
             "async def _handler_mw(request, call_next):\n"
             "    response = await call_next(request)\n"
@@ -477,7 +477,7 @@ class TestMixedHandlerTypes:
             "async def get():\n"
             '    return {"handler": "plain-get"}\n'
             "\n"
-            "class post(route):\n"
+            "class POST(Route):\n"
             "    middleware = [_handler_mw]\n"
             "\n"
             "    async def handler():\n"
@@ -736,7 +736,7 @@ class TestMultipleMiddlewareInSameLevel:
         route_dir = tmp_path / "resources"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            "from fastapi_filebased_routing.core.middleware import route\n"
+            "from fastapi_filebased_routing.core.middleware import Route\n"
             "\n"
             "async def _mw1(request, call_next):\n"
             "    response = await call_next(request)\n"
@@ -750,7 +750,7 @@ class TestMultipleMiddlewareInSameLevel:
             '    response.headers["X-Order"] = f"{order}mw2,"\n'
             "    return response\n"
             "\n"
-            "class post(route):\n"
+            "class POST(Route):\n"
             "    middleware = [_mw1, _mw2]\n"
             "\n"
             "    async def handler():\n"
@@ -844,7 +844,7 @@ class TestComprehensiveIntegration:
         users_dir.mkdir()
         (users_dir / "route.py").write_text(
             "from fastapi import Request\n"
-            "from fastapi_filebased_routing.core.middleware import route\n"
+            "from fastapi_filebased_routing.core.middleware import Route\n"
             "\n"
             "async def rate_limit(request, call_next):\n"
             "    response = await call_next(request)\n"
@@ -856,7 +856,7 @@ class TestComprehensiveIntegration:
             "async def get(request: Request):\n"
             '    return {"users": [], "authenticated": request.state.authenticated}\n'
             "\n"
-            "class post(route):\n"
+            "class POST(Route):\n"
             "    # Handler-specific middleware for admin check\n"
             "    async def admin_check(request, call_next):\n"
             "        request.state.is_admin = True\n"

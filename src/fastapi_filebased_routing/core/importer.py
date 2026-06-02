@@ -15,7 +15,7 @@ from types import ModuleType
 from typing import Any
 
 from fastapi_filebased_routing.core.middleware import (
-    RouteConfig,
+    Route,
     normalize_middleware,
     validate_middleware_entries,
 )
@@ -285,6 +285,24 @@ def import_route_module(file_path: Path, *, base_path: Path | None = None) -> Mo
     return module
 
 
+def _ensure_websocket_async(handler_fn: Callable[..., Any], file_path: Path) -> None:
+    """Validate that a websocket handler is an async coroutine function.
+
+    Args:
+        handler_fn: The websocket handler callable.
+        file_path: Path to the route file (for error messages).
+
+    Raises:
+        RouteValidationError: If the handler is not a coroutine function.
+    """
+    if not inspect.iscoroutinefunction(handler_fn):
+        raise RouteValidationError(
+            f"WebSocket handler must be async in route.py\n"
+            f"  File: {file_path}\n"
+            f"  Hint: Define the websocket handler with 'async def'."
+        )
+
+
 def extract_handlers(module: ModuleType, file_path: Path) -> ExtractedRoute:  # noqa: C901
     """Extract HTTP method handlers and metadata from a route module.
 
@@ -335,23 +353,28 @@ def extract_handlers(module: ModuleType, file_path: Path) -> ExtractedRoute:  # 
         if name.startswith("_"):
             continue
 
+        obj = getattr(module, name)
+
+        # Route subclass (class GET(Route)) → use its built RouteConfig.
+        # Checked before the uppercase-constant skip below: verb names like
+        # GET/POST are all-caps and would otherwise be treated as constants.
+        if isinstance(obj, type) and issubclass(obj, Route) and obj is not Route:
+            if name.lower() in ALLOWED_HANDLERS:
+                handler_name = name.lower()
+                config = obj._config
+                if handler_name == "websocket":
+                    _ensure_websocket_async(config.handler, file_path)
+                handlers[handler_name] = config
+            else:
+                invalid_exports.append(name)
+            continue
+
         # Skip uppercase constants (TAGS, SUMMARY, etc.)
         if name.isupper():
             continue
 
         # Skip the "middleware" attribute itself (list or callable)
         if name == "middleware":
-            continue
-
-        obj = getattr(module, name)
-
-        # Check for RouteConfig objects BEFORE generic callable check
-        # RouteConfig is callable, so this must come first
-        if isinstance(obj, RouteConfig):
-            if name.lower() in ALLOWED_HANDLERS:
-                handlers[name.lower()] = obj
-            else:
-                invalid_exports.append(name)
             continue
 
         # Skip non-callables (imports, etc.)
@@ -371,12 +394,8 @@ def extract_handlers(module: ModuleType, file_path: Path) -> ExtractedRoute:  # 
             handler_name = name.lower()
 
             # WebSocket handlers must be async
-            if handler_name == "websocket" and not inspect.iscoroutinefunction(obj):
-                raise RouteValidationError(
-                    f"WebSocket handler must be async in route.py\n"
-                    f"  File: {file_path}\n"
-                    f"  Hint: Change 'def websocket(...)' to 'async def websocket(...)'"
-                )
+            if handler_name == "websocket":
+                _ensure_websocket_async(obj, file_path)
 
             handlers[handler_name] = obj
         else:
