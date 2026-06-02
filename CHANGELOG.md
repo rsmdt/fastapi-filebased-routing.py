@@ -11,13 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Replaced the `route` metaclass with a plain `Route` base class. Declare handlers as `class VERB(Route):` (uppercase HTTP verb); the subclass stays a real class and is now correctly typed.
 
-### Removed
+### Removed (BREAKING)
 
-- The `route` symbol and `_RouteMeta` metaclass. Use `Route` instead; other exports are unchanged.
+- The `route` symbol and `_RouteMeta` metaclass. Use `Route` instead.
+- The orphan core-type exports `PathSegment`, `SegmentType`, `RouteDefinition`, `RouteMetadata`, and `ExtractedRoute` are no longer re-exported from the package root. They were never produced or consumed by any public entry point. They remain available from their internal modules (`fastapi_filebased_routing.core.paths`, `.discovery`, `.handlers`) for advanced use, but those paths are internal and unstable. The supported public surface is now `create_router_from_path`, `Route`, `RouteConfig`, `dispatch`, and the exception hierarchy.
+
+### Changed (internal, no public-contract change)
+
+- Rewrote the internals for clarity: framework-agnostic `core/` (paths, discovery, selection, module_loader, handlers, routes, middleware, dispatch, middleware_loader) and a thin FastAPI `adapter/` (registration, router_factory). Filenames and deep import paths changed; the public usage contract (top-level exports, `class VERB(Route)`, file conventions, behavior) is unchanged.
+- Exported symbols now report `fastapi_filebased_routing` as their `__module__` (cleaner tracebacks and docs).
 
 ### Migration
 
 - Change the import from `route` to `Route` and rename `class <verb>(route):` to `class <VERB>(Route):`. Optionally mark `handler` as `@staticmethod`.
+- If you imported `PathSegment`, `SegmentType`, `RouteDefinition`, `RouteMetadata`, or `ExtractedRoute` from the package root, import them from their `core.*` modules instead (note: internal, unstable). Most code does not need them.
 
 ## [1.2.1]
 

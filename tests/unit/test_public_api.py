@@ -35,21 +35,22 @@ def test_route_config_is_dataclass():
     assert "middleware" in RouteConfig.__dataclass_fields__
 
 
-def test_core_types_exported():
-    """Core types are still exported (backward compatibility)."""
-    from fastapi_filebased_routing import (
-        ExtractedRoute,
-        PathSegment,
-        RouteDefinition,
-        RouteMetadata,
-        SegmentType,
-    )
+def test_internal_types_not_exported_at_root():
+    """Internal pipeline types are NOT part of the public surface (sunset in 2.0.0).
 
-    assert ExtractedRoute is not None
-    assert PathSegment is not None
-    assert RouteDefinition is not None
-    assert RouteMetadata is not None
-    assert SegmentType is not None
+    They remain importable from their internal ``core.*`` homes for advanced use,
+    but the package root intentionally does not re-export them.
+    """
+    import fastapi_filebased_routing as m
+
+    for name in (
+        "ExtractedRoute",
+        "PathSegment",
+        "RouteDefinition",
+        "RouteMetadata",
+        "SegmentType",
+    ):
+        assert not hasattr(m, name), f"{name} should no longer be a public root export"
 
 
 def test_exceptions_exported():
@@ -101,13 +102,6 @@ def test_all_contains_existing_exports():
 
     # Primary API
     assert "create_router_from_path" in fastapi_filebased_routing.__all__
-
-    # Core types
-    assert "ExtractedRoute" in fastapi_filebased_routing.__all__
-    assert "PathSegment" in fastapi_filebased_routing.__all__
-    assert "RouteDefinition" in fastapi_filebased_routing.__all__
-    assert "RouteMetadata" in fastapi_filebased_routing.__all__
-    assert "SegmentType" in fastapi_filebased_routing.__all__
 
     # Exceptions
     assert "DuplicateRouteError" in fastapi_filebased_routing.__all__
@@ -171,11 +165,6 @@ _EXPECTED_EXPORTS = {
     "dispatch",
     "Route",
     "RouteConfig",
-    "ExtractedRoute",
-    "PathSegment",
-    "RouteDefinition",
-    "RouteMetadata",
-    "SegmentType",
     "DuplicateRouteError",
     "FileBasedRoutingError",
     "MiddlewareValidationError",
