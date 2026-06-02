@@ -162,3 +162,66 @@ def test_route_filter_error_import_path():
 
     # Should be the same class
     assert RouteFilterError is ExcRouteFilterError
+
+
+# === Public-surface guard (pattern from httpx tests/test_exported_members.py) ===
+
+_EXPECTED_EXPORTS = {
+    "create_router_from_path",
+    "dispatch",
+    "Route",
+    "RouteConfig",
+    "ExtractedRoute",
+    "PathSegment",
+    "RouteDefinition",
+    "RouteMetadata",
+    "SegmentType",
+    "DuplicateRouteError",
+    "FileBasedRoutingError",
+    "MiddlewareValidationError",
+    "PathParseError",
+    "RouteDiscoveryError",
+    "RouteFilterError",
+    "RouteValidationError",
+}
+
+
+def test_all_is_exactly_the_curated_set():
+    """__all__ is locked to the intended public surface.
+
+    Tripwire against accidentally widening (or shrinking) the public API. Adding
+    a new export is a deliberate act that must update this set.
+    """
+    import fastapi_filebased_routing as m
+
+    assert set(m.__all__) == _EXPECTED_EXPORTS
+
+
+def test_no_internal_symbols_leak_at_package_root():
+    """Every public top-level attribute is an export or a submodule — no stray internals.
+
+    Guards the promise that ``core.*`` / ``adapter.*`` internals are not exposed
+    accidentally at the package root.
+    """
+    import types
+
+    import fastapi_filebased_routing as m
+
+    public = {name for name in dir(m) if not name.startswith("_")}
+    submodules = {name for name in public if isinstance(getattr(m, name), types.ModuleType)}
+    leaked = public - set(m.__all__) - submodules
+    assert leaked == set(), f"unexpected public symbols at package root: {sorted(leaked)}"
+
+
+def test_exports_report_public_module_path():
+    """Exported symbols report the public import path, not internal core.*/adapter.*.
+
+    Keeps tracebacks, reprs, and generated docs honest about the sanctioned path.
+    """
+    import fastapi_filebased_routing as m
+
+    for name in m.__all__:
+        obj = getattr(m, name)
+        assert obj.__module__ == "fastapi_filebased_routing", (
+            f"{name}.__module__ leaks internal path {obj.__module__!r}"
+        )
