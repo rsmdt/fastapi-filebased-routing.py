@@ -1,35 +1,27 @@
-"""Tests for the FastAPI router adapter module."""
+"""Tests for the adapter router_factory orchestration (create_router_from_path).
 
+These exercise the end-to-end behavior of the orchestration entry point:
+route discovery, status codes, tag derivation, metadata, prefixing, nested
+routes, duplicate detection, error handling, WebSocket registration, handler
+middleware wrapping, and include/exclude filtering.
+"""
+
+import logging
 from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from fastapi_filebased_routing import create_router_from_path
 from fastapi_filebased_routing.exceptions import (
     DuplicateRouteError,
     RouteDiscoveryError,
     RouteFilterError,
 )
-from fastapi_filebased_routing.fastapi.router import (
-    DEFAULT_STATUS_CODES,
-    create_router_from_path,
-)
 
-
-class TestDefaultStatusCodes:
-    """Test the DEFAULT_STATUS_CODES configuration."""
-
-    def test_post_defaults_to_201(self):
-        assert DEFAULT_STATUS_CODES["post"] == 201
-
-    def test_delete_defaults_to_204(self):
-        assert DEFAULT_STATUS_CODES["delete"] == 204
-
-    def test_other_methods_not_in_dict(self):
-        assert "get" not in DEFAULT_STATUS_CODES
-        assert "put" not in DEFAULT_STATUS_CODES
-        assert "patch" not in DEFAULT_STATUS_CODES
+# Logger that emits the WebSocket "skipped middleware" warning.
+_REGISTRATION_LOGGER = "fastapi_filebased_routing.adapter.registration"
 
 
 class TestBasicRouteDiscovery:
@@ -683,8 +675,6 @@ async def websocket(websocket: WebSocket):
         self, tmp_path: Path, create_route_file, caplog
     ):
         """WebSocket handler with applicable middleware emits warning."""
-        import logging
-
         # Create directory middleware
         mw_dir = tmp_path / "ws"
         mw_dir.mkdir()
@@ -704,7 +694,7 @@ async def websocket(websocket: WebSocket):
             subdir="ws",
         )
 
-        with caplog.at_level(logging.WARNING, logger="fastapi_filebased_routing.fastapi.router"):
+        with caplog.at_level(logging.WARNING, logger=_REGISTRATION_LOGGER):
             router = create_router_from_path(tmp_path)
 
         # Warning should be emitted
@@ -724,8 +714,6 @@ async def websocket(websocket: WebSocket):
         self, tmp_path: Path, create_route_file, caplog
     ):
         """WebSocket handler without middleware does NOT emit warning."""
-        import logging
-
         create_route_file(
             content="""
 from fastapi import WebSocket
@@ -738,458 +726,15 @@ async def websocket(websocket: WebSocket):
             subdir="ws_clean",
         )
 
-        with caplog.at_level(logging.WARNING, logger="fastapi_filebased_routing.fastapi.router"):
+        with caplog.at_level(logging.WARNING, logger=_REGISTRATION_LOGGER):
             create_router_from_path(tmp_path)
 
         # No warning should be emitted
         assert not any("WebSocket" in record.message for record in caplog.records)
 
 
-class TestLoadDirectoryMiddleware:
-    """Test _load_directory_middleware() helper function."""
-
-    def test_loads_middleware_from_list(self, tmp_path: Path):
-        """Loads middleware from _middleware.py with middleware = [fn1, fn2] list."""
-        from fastapi_filebased_routing.core.scanner import MiddlewareFile
-        from fastapi_filebased_routing.fastapi.router import _load_directory_middleware
-
-        # Create _middleware.py with a list of functions
-        mw_dir = tmp_path / "api"
-        mw_dir.mkdir()
-        mw_file = mw_dir / "_middleware.py"
-        mw_file.write_text("""
-async def mw1(request, call_next):
-    response = await call_next(request)
-    return response
-
-async def mw2(request, call_next):
-    response = await call_next(request)
-    return response
-
-middleware = [mw1, mw2]
-""")
-
-        middleware_files = [
-            MiddlewareFile(
-                file_path=mw_file,
-                directory=mw_dir,
-                depth=1,
-            )
-        ]
-
-        result = _load_directory_middleware(middleware_files, tmp_path)
-
-        assert mw_dir in result
-        assert len(result[mw_dir]) == 2
-        assert callable(result[mw_dir][0])
-        assert callable(result[mw_dir][1])
-
-    def test_handles_single_callable(self, tmp_path: Path):
-        """Handles middleware = single_fn (single callable)."""
-        from fastapi_filebased_routing.core.scanner import MiddlewareFile
-        from fastapi_filebased_routing.fastapi.router import _load_directory_middleware
-
-        # Create _middleware.py with a single callable
-        mw_dir = tmp_path / "api"
-        mw_dir.mkdir()
-        mw_file = mw_dir / "_middleware.py"
-        mw_file.write_text("""
-async def auth_middleware(request, call_next):
-    response = await call_next(request)
-    return response
-
-middleware = auth_middleware
-""")
-
-        middleware_files = [
-            MiddlewareFile(
-                file_path=mw_file,
-                directory=mw_dir,
-                depth=1,
-            )
-        ]
-
-        result = _load_directory_middleware(middleware_files, tmp_path)
-
-        assert mw_dir in result
-        assert len(result[mw_dir]) == 1
-        assert callable(result[mw_dir][0])
-
-    def test_handles_inline_function(self, tmp_path: Path):
-        """Handles inline async def middleware(request, call_next) function."""
-        from fastapi_filebased_routing.core.scanner import MiddlewareFile
-        from fastapi_filebased_routing.fastapi.router import _load_directory_middleware
-
-        # Create _middleware.py with inline function definition
-        mw_dir = tmp_path / "api"
-        mw_dir.mkdir()
-        mw_file = mw_dir / "_middleware.py"
-        mw_file.write_text("""
-async def middleware(request, call_next):
-    response = await call_next(request)
-    return response
-""")
-
-        middleware_files = [
-            MiddlewareFile(
-                file_path=mw_file,
-                directory=mw_dir,
-                depth=1,
-            )
-        ]
-
-        result = _load_directory_middleware(middleware_files, tmp_path)
-
-        assert mw_dir in result
-        assert len(result[mw_dir]) == 1
-        assert callable(result[mw_dir][0])
-
-    def test_raises_error_when_import_fails(self, tmp_path: Path):
-        """Raises MiddlewareValidationError when _middleware.py fails to import."""
-        from fastapi_filebased_routing.core.scanner import MiddlewareFile
-        from fastapi_filebased_routing.exceptions import MiddlewareValidationError
-        from fastapi_filebased_routing.fastapi.router import _load_directory_middleware
-
-        # Create _middleware.py with syntax error
-        mw_dir = tmp_path / "api"
-        mw_dir.mkdir()
-        mw_file = mw_dir / "_middleware.py"
-        mw_file.write_text("""
-async def middleware(request, call_next):
-    # Syntax error
-    return await call_next(request
-""")
-
-        middleware_files = [
-            MiddlewareFile(
-                file_path=mw_file,
-                directory=mw_dir,
-                depth=1,
-            )
-        ]
-
-        with pytest.raises(MiddlewareValidationError) as exc_info:
-            _load_directory_middleware(middleware_files, tmp_path)
-
-        assert "Failed to import" in str(exc_info.value)
-
-    def test_raises_error_for_non_callable_middleware(self, tmp_path: Path):
-        """Raises MiddlewareValidationError when middleware contains non-callable."""
-        from fastapi_filebased_routing.core.scanner import MiddlewareFile
-        from fastapi_filebased_routing.exceptions import MiddlewareValidationError
-        from fastapi_filebased_routing.fastapi.router import _load_directory_middleware
-
-        # Create _middleware.py with non-callable in list
-        mw_dir = tmp_path / "api"
-        mw_dir.mkdir()
-        mw_file = mw_dir / "_middleware.py"
-        mw_file.write_text("""
-middleware = ["not_a_function"]
-""")
-
-        middleware_files = [
-            MiddlewareFile(
-                file_path=mw_file,
-                directory=mw_dir,
-                depth=1,
-            )
-        ]
-
-        with pytest.raises(MiddlewareValidationError) as exc_info:
-            _load_directory_middleware(middleware_files, tmp_path)
-
-        assert "Non-callable middleware" in str(exc_info.value)
-
-    def test_raises_error_for_sync_middleware(self, tmp_path: Path):
-        """Raises MiddlewareValidationError for sync middleware."""
-        from fastapi_filebased_routing.core.scanner import MiddlewareFile
-        from fastapi_filebased_routing.exceptions import MiddlewareValidationError
-        from fastapi_filebased_routing.fastapi.router import _load_directory_middleware
-
-        # Create _middleware.py with sync function
-        mw_dir = tmp_path / "api"
-        mw_dir.mkdir()
-        mw_file = mw_dir / "_middleware.py"
-        mw_file.write_text("""
-def sync_middleware(request, call_next):
-    return call_next(request)
-
-middleware = sync_middleware
-""")
-
-        middleware_files = [
-            MiddlewareFile(
-                file_path=mw_file,
-                directory=mw_dir,
-                depth=1,
-            )
-        ]
-
-        with pytest.raises(MiddlewareValidationError) as exc_info:
-            _load_directory_middleware(middleware_files, tmp_path)
-
-        assert "must be async" in str(exc_info.value)
-
-    def test_returns_empty_dict_for_empty_list(self, tmp_path: Path):
-        """Returns empty dict for empty list."""
-        from fastapi_filebased_routing.core.scanner import MiddlewareFile
-        from fastapi_filebased_routing.fastapi.router import _load_directory_middleware
-
-        # Create _middleware.py with empty list
-        mw_dir = tmp_path / "api"
-        mw_dir.mkdir()
-        mw_file = mw_dir / "_middleware.py"
-        mw_file.write_text("""
-middleware = []
-""")
-
-        middleware_files = [
-            MiddlewareFile(
-                file_path=mw_file,
-                directory=mw_dir,
-                depth=1,
-            )
-        ]
-
-        result = _load_directory_middleware(middleware_files, tmp_path)
-
-        # Empty list means no middleware for that directory
-        assert mw_dir in result
-        assert len(result[mw_dir]) == 0
-
-    def test_handles_multiple_directory_middleware_files(self, tmp_path: Path):
-        """Handles multiple directory middleware files."""
-        from fastapi_filebased_routing.core.scanner import MiddlewareFile
-        from fastapi_filebased_routing.fastapi.router import _load_directory_middleware
-
-        # Create first _middleware.py
-        mw_dir1 = tmp_path / "api"
-        mw_dir1.mkdir()
-        mw_file1 = mw_dir1 / "_middleware.py"
-        mw_file1.write_text("""
-async def mw1(request, call_next):
-    response = await call_next(request)
-    return response
-
-middleware = mw1
-""")
-
-        # Create second _middleware.py
-        mw_dir2 = tmp_path / "api" / "v1"
-        mw_dir2.mkdir()
-        mw_file2 = mw_dir2 / "_middleware.py"
-        mw_file2.write_text("""
-async def mw2(request, call_next):
-    response = await call_next(request)
-    return response
-
-middleware = mw2
-""")
-
-        middleware_files = [
-            MiddlewareFile(file_path=mw_file1, directory=mw_dir1, depth=1),
-            MiddlewareFile(file_path=mw_file2, directory=mw_dir2, depth=2),
-        ]
-
-        result = _load_directory_middleware(middleware_files, tmp_path)
-
-        assert len(result) == 2
-        assert mw_dir1 in result
-        assert mw_dir2 in result
-        assert len(result[mw_dir1]) == 1
-        assert len(result[mw_dir2]) == 1
-
-
-class TestCollectDirectoryMiddleware:
-    """Test _collect_directory_middleware() helper function."""
-
-    def test_collects_from_base_to_route_dir(self, tmp_path: Path):
-        """Collects middleware from base to route dir."""
-        from fastapi_filebased_routing.fastapi.router import _collect_directory_middleware
-
-        # Create mock middleware for base and subdirectory
-        async def base_mw(request, call_next):
-            return await call_next(request)
-
-        async def sub_mw(request, call_next):
-            return await call_next(request)
-
-        # Setup directory structure
-        sub_dir = tmp_path / "api" / "users"
-        sub_dir.mkdir(parents=True)
-
-        dir_middleware = {
-            tmp_path: (base_mw,),
-            tmp_path / "api": (sub_mw,),
-        }
-
-        result = _collect_directory_middleware(
-            route_dir=sub_dir,
-            base_path=tmp_path,
-            dir_middleware=dir_middleware,
-        )
-
-        assert len(result) == 2
-        assert result[0] == base_mw
-        assert result[1] == sub_mw
-
-    def test_sibling_directory_middleware_does_not_apply(self, tmp_path: Path):
-        """Sibling directory middleware does NOT apply."""
-        from fastapi_filebased_routing.fastapi.router import _collect_directory_middleware
-
-        async def sibling_mw(request, call_next):
-            return await call_next(request)
-
-        # Create sibling directories
-        route_dir = tmp_path / "api" / "users"
-        route_dir.mkdir(parents=True)
-
-        sibling_dir = tmp_path / "api" / "posts"
-        sibling_dir.mkdir(parents=True)
-
-        dir_middleware = {
-            sibling_dir: (sibling_mw,),
-        }
-
-        result = _collect_directory_middleware(
-            route_dir=route_dir,
-            base_path=tmp_path,
-            dir_middleware=dir_middleware,
-        )
-
-        # No middleware should be collected from sibling
-        assert len(result) == 0
-
-    def test_route_group_middleware_applies_within_group(self, tmp_path: Path):
-        """Route group (name)/ middleware applies within group."""
-        from fastapi_filebased_routing.fastapi.router import _collect_directory_middleware
-
-        async def group_mw(request, call_next):
-            return await call_next(request)
-
-        # Create route group directory
-        group_dir = tmp_path / "(admin)"
-        group_dir.mkdir()
-
-        route_dir = tmp_path / "(admin)" / "users"
-        route_dir.mkdir()
-
-        dir_middleware = {
-            group_dir: (group_mw,),
-        }
-
-        result = _collect_directory_middleware(
-            route_dir=route_dir,
-            base_path=tmp_path,
-            dir_middleware=dir_middleware,
-        )
-
-        assert len(result) == 1
-        assert result[0] == group_mw
-
-    def test_no_directory_middleware_returns_empty_tuple(self, tmp_path: Path):
-        """No directory middleware returns empty tuple."""
-        from fastapi_filebased_routing.fastapi.router import _collect_directory_middleware
-
-        route_dir = tmp_path / "api" / "users"
-        route_dir.mkdir(parents=True)
-
-        result = _collect_directory_middleware(
-            route_dir=route_dir,
-            base_path=tmp_path,
-            dir_middleware={},
-        )
-
-        assert result == ()
-
-    def test_multiple_levels_ordered_correctly(self, tmp_path: Path):
-        """Multiple levels ordered correctly (parent before child)."""
-        from fastapi_filebased_routing.fastapi.router import _collect_directory_middleware
-
-        async def base_mw(request, call_next):
-            return await call_next(request)
-
-        async def api_mw(request, call_next):
-            return await call_next(request)
-
-        async def v1_mw(request, call_next):
-            return await call_next(request)
-
-        async def users_mw(request, call_next):
-            return await call_next(request)
-
-        # Setup deeply nested directory structure
-        route_dir = tmp_path / "api" / "v1" / "users"
-        route_dir.mkdir(parents=True)
-
-        dir_middleware = {
-            tmp_path: (base_mw,),
-            tmp_path / "api": (api_mw,),
-            tmp_path / "api" / "v1": (v1_mw,),
-            route_dir: (users_mw,),
-        }
-
-        result = _collect_directory_middleware(
-            route_dir=route_dir,
-            base_path=tmp_path,
-            dir_middleware=dir_middleware,
-        )
-
-        # Should be ordered from parent to child
-        assert len(result) == 4
-        assert result[0] == base_mw
-        assert result[1] == api_mw
-        assert result[2] == v1_mw
-        assert result[3] == users_mw
-
-    def test_only_collects_middleware_from_directories_that_have_it(self, tmp_path: Path):
-        """Only collects middleware from directories that have it."""
-        from fastapi_filebased_routing.fastapi.router import _collect_directory_middleware
-
-        async def base_mw(request, call_next):
-            return await call_next(request)
-
-        async def users_mw(request, call_next):
-            return await call_next(request)
-
-        # Setup nested directory structure where middle level has no middleware
-        route_dir = tmp_path / "api" / "v1" / "users"
-        route_dir.mkdir(parents=True)
-
-        dir_middleware = {
-            tmp_path: (base_mw,),
-            # No middleware for "api" or "v1"
-            route_dir: (users_mw,),
-        }
-
-        result = _collect_directory_middleware(
-            route_dir=route_dir,
-            base_path=tmp_path,
-            dir_middleware=dir_middleware,
-        )
-
-        # Should only have base and users middleware
-        assert len(result) == 2
-        assert result[0] == base_mw
-        assert result[1] == users_mw
-
-
-class TestMakeMiddlewareRoute:
-    """Test _make_middleware_route() helper function."""
-
-    def test_returns_subclass_of_apiroute(self, tmp_path: Path):
-        """Returns a subclass of APIRoute."""
-        from fastapi.routing import APIRoute
-
-        from fastapi_filebased_routing.fastapi.router import _make_middleware_route
-
-        async def mw(request, call_next):
-            return await call_next(request)
-
-        route_class = _make_middleware_route([mw])
-
-        assert issubclass(route_class, APIRoute)
-        assert route_class != APIRoute
+class TestHandlerMiddlewareWrapping:
+    """Test that handler/file/directory middleware wraps handlers end-to-end."""
 
     def test_middleware_wraps_handlers(self, tmp_path: Path, create_route_file):
         """Middleware wraps handlers (use FastAPI TestClient)."""

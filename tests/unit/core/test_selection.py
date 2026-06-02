@@ -1,18 +1,18 @@
-"""Unit tests for core route filtering module."""
+"""Unit tests for the core selection module (pipeline stage 3: route selection)."""
 
 from pathlib import Path
 
 import pytest
 
-from fastapi_filebased_routing.core.filter import (
+from fastapi_filebased_routing.core.discovery import DirectoryMiddleware, RouteDefinition
+from fastapi_filebased_routing.core.selection import (
     _matches_any_pattern,
     _relative_directory,
     compute_active_directories,
-    filter_middleware_files,
+    filter_directory_middleware,
     filter_routes,
     validate_filter_params,
 )
-from fastapi_filebased_routing.core.scanner import MiddlewareFile, RouteDefinition
 from fastapi_filebased_routing.exceptions import RouteFilterError
 
 # ---------------------------------------------------------------------------
@@ -30,10 +30,10 @@ def _route(base: Path, subdir: str) -> RouteDefinition:
     )
 
 
-def _mw_file(base: Path, subdir: str, depth: int) -> MiddlewareFile:
-    """Create a minimal MiddlewareFile for testing."""
+def _mw_file(base: Path, subdir: str, depth: int) -> DirectoryMiddleware:
+    """Create a minimal DirectoryMiddleware for testing."""
     directory = base if subdir == "." else base / subdir
-    return MiddlewareFile(
+    return DirectoryMiddleware(
         file_path=directory / "_middleware.py",
         directory=directory,
         depth=depth,
@@ -375,16 +375,16 @@ class TestComputeActiveDirectories:
 
 
 # ---------------------------------------------------------------------------
-# filter_middleware_files
+# filter_directory_middleware
 # ---------------------------------------------------------------------------
 
 
-class TestFilterMiddlewareFiles:
-    """Tests for filter_middleware_files()."""
+class TestFilterDirectoryMiddleware:
+    """Tests for filter_directory_middleware()."""
 
     def test_empty_list_returns_empty(self, tmp_path: Path) -> None:
         """Empty middleware list returns empty list."""
-        result = filter_middleware_files([], set())
+        result = filter_directory_middleware([], set())
         assert result == []
 
     def test_all_in_active_dirs_kept(self, tmp_path: Path) -> None:
@@ -394,7 +394,7 @@ class TestFilterMiddlewareFiles:
             _mw_file(tmp_path, "api", 1),
         ]
         active = {tmp_path, tmp_path / "api"}
-        result = filter_middleware_files(mw_files, active)
+        result = filter_directory_middleware(mw_files, active)
         assert result == mw_files
 
     def test_filters_out_inactive_dirs(self, tmp_path: Path) -> None:
@@ -405,7 +405,7 @@ class TestFilterMiddlewareFiles:
             _mw_file(tmp_path, "(admin)", 1),
         ]
         active = {tmp_path, tmp_path / "api"}
-        result = filter_middleware_files(mw_files, active)
+        result = filter_directory_middleware(mw_files, active)
         assert len(result) == 2
         assert mw_files[0] in result
         assert mw_files[1] in result

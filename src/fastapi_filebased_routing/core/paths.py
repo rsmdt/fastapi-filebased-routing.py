@@ -1,10 +1,12 @@
-"""Path segment parser for file-based routing.
+"""Pipeline stage 1: path-segment grammar for file-based routing.
 
-Converts directory names into FastAPI path patterns:
-- [param] -> {param} (required parameter)
-- (group) -> skipped (route group, not in URL)
-- [...param] -> {param:path} (catch-all parameter)
-- [[param]] -> {param} with optional flag (optional parameter)
+Parses directory names into typed PathSegments and renders them to FastAPI
+path strings:
+
+- ``[param]`` -> ``{param}`` (required parameter)
+- ``(group)`` -> skipped (route group, not in URL)
+- ``[...param]`` -> ``{param:path}`` (catch-all parameter)
+- ``[[param]]`` -> ``{param}`` with optional flag (optional parameter)
 """
 
 import re

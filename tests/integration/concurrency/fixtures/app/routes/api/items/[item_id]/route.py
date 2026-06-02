@@ -5,7 +5,7 @@ import random
 
 from fastapi import Request
 
-from fastapi_filebased_routing.core.middleware import Route
+from fastapi_filebased_routing import Route
 
 
 async def _handler_middleware(request, call_next):  # type: ignore[no-untyped-def]

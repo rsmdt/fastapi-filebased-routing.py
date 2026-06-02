@@ -1,21 +1,23 @@
-"""Tests for core.importer module."""
+"""Tests for the core handlers module (high-level route.py interpretation).
+
+Covers verb-handler extraction, RouteMetadata, invalid-export rules, the
+async-websocket rule, file-level middleware, Route-subclass detection, and the
+load_route public entry point.
+"""
 
 import inspect
-import os
-import sys
 from pathlib import Path
 
 import pytest
 
-from fastapi_filebased_routing.core.importer import (
+from fastapi_filebased_routing.core.handlers import (
     ALLOWED_HANDLERS,
     ExtractedRoute,
     RouteMetadata,
-    _file_identity_cache,
-    extract_handlers,
-    import_route_module,
+    _extract_handlers,
     load_route,
 )
+from fastapi_filebased_routing.core.module_loader import import_route_module
 from fastapi_filebased_routing.exceptions import RouteValidationError
 
 
@@ -32,138 +34,8 @@ class TestAllowedHandlers:
         assert isinstance(ALLOWED_HANDLERS, frozenset)
 
 
-class TestImportRouteModule:
-    """Tests for import_route_module function."""
-
-    def test_imports_valid_route_file(self, tmp_path: Path):
-        """Import a valid route.py file successfully."""
-        route_file = tmp_path / "route.py"
-        route_file.write_text("async def get(): return 'hello'")
-
-        module = import_route_module(route_file, base_path=tmp_path)
-
-        assert hasattr(module, "get")
-        assert callable(module.get)
-
-    def test_imports_without_base_path(self, tmp_path: Path):
-        """Import works when base_path is not provided."""
-        route_file = tmp_path / "route.py"
-        route_file.write_text("async def get(): pass")
-
-        module = import_route_module(route_file)
-
-        assert hasattr(module, "get")
-
-    def test_caches_imported_modules_in_sys_modules(self, tmp_path: Path):
-        """Imported modules are cached in sys.modules."""
-        route_file = tmp_path / "route.py"
-        route_file.write_text("async def get(): return 'hello'")
-
-        module1 = import_route_module(route_file, base_path=tmp_path)
-        module2 = import_route_module(route_file, base_path=tmp_path)
-
-        assert module1 is module2
-
-    def test_rejects_path_traversal_with_dots(self, tmp_path: Path):
-        """Reject paths containing .. as path component."""
-        malicious_path = tmp_path / ".." / "outside" / "route.py"
-
-        with pytest.raises(RouteValidationError, match="Path traversal"):
-            import_route_module(malicious_path, base_path=tmp_path)
-
-    def test_rejects_file_outside_base_path(self, tmp_path: Path):
-        """Reject files outside the allowed base_path."""
-        # Create file outside the allowed base
-        outside_dir = tmp_path / "outside"
-        outside_dir.mkdir()
-        outside_file = outside_dir / "route.py"
-        outside_file.write_text("async def get(): pass")
-
-        # Set base path to different directory
-        allowed_dir = tmp_path / "allowed"
-        allowed_dir.mkdir()
-
-        with pytest.raises(RouteValidationError, match="outside allowed directory"):
-            import_route_module(outside_file, base_path=allowed_dir)
-
-    def test_accepts_file_inside_base_path(self, tmp_path: Path):
-        """Accept files inside the base_path."""
-        subdir = tmp_path / "users" / "[user_id]"
-        subdir.mkdir(parents=True)
-        route_file = subdir / "route.py"
-        route_file.write_text("async def get(): pass")
-
-        module = import_route_module(route_file, base_path=tmp_path)
-
-        assert hasattr(module, "get")
-
-    def test_rejects_non_route_filename(self, tmp_path: Path):
-        """Reject files not named route.py."""
-        other_file = tmp_path / "other.py"
-        other_file.write_text("async def get(): pass")
-
-        with pytest.raises(RouteValidationError, match="Invalid route file name"):
-            import_route_module(other_file, base_path=tmp_path)
-
-    def test_raises_for_nonexistent_file(self, tmp_path: Path):
-        """Raise error for files that don't exist."""
-        nonexistent = tmp_path / "route.py"
-
-        with pytest.raises(RouteValidationError, match="does not exist"):
-            import_route_module(nonexistent, base_path=tmp_path)
-
-    def test_wraps_import_error_for_syntax_errors(self, tmp_path: Path):
-        """Wrap ImportError in RouteValidationError for syntax errors."""
-        route_file = tmp_path / "route.py"
-        route_file.write_text("def get(: invalid syntax")
-
-        with pytest.raises(RouteValidationError, match="Failed to import"):
-            import_route_module(route_file, base_path=tmp_path)
-
-    def test_wraps_import_error_for_missing_imports(self, tmp_path: Path):
-        """Wrap ImportError in RouteValidationError for missing imports."""
-        route_file = tmp_path / "route.py"
-        route_file.write_text("import nonexistent_module\nasync def get(): pass")
-
-        with pytest.raises(RouteValidationError, match="Failed to import"):
-            import_route_module(route_file, base_path=tmp_path)
-
-    def test_validates_parameter_name_in_path(self, tmp_path: Path):
-        """Validate parameter names in directory paths during import."""
-        invalid_dir = tmp_path / "[123invalid]"
-        invalid_dir.mkdir()
-        route_file = invalid_dir / "route.py"
-        route_file.write_text("async def get(): pass")
-
-        with pytest.raises(RouteValidationError, match="Invalid parameter name"):
-            import_route_module(route_file, base_path=tmp_path)
-
-    def test_generates_deterministic_module_names(self, tmp_path: Path):
-        """Module names are deterministic based on file path."""
-        route_file = tmp_path / "users" / "[user_id]" / "route.py"
-        route_file.parent.mkdir(parents=True)
-        route_file.write_text("async def get(): pass")
-
-        module = import_route_module(route_file, base_path=tmp_path)
-
-        # Module name should be in sys.modules
-        assert module.__name__ in sys.modules
-
-    def test_cleans_up_sys_modules_on_import_failure(self, tmp_path: Path):
-        """Clean up sys.modules if module execution fails."""
-        route_file = tmp_path / "route.py"
-        route_file.write_text("raise RuntimeError('boom')")
-
-        with pytest.raises(RouteValidationError):
-            import_route_module(route_file, base_path=tmp_path)
-
-        # Module should not be in sys.modules after failure
-        # We can't easily test this without knowing the exact module name,
-        # but the implementation should handle it
-
-
 class TestExtractHandlers:
-    """Tests for extract_handlers function."""
+    """Tests for _extract_handlers function."""
 
     def test_extracts_async_get_handler(self, tmp_path: Path):
         """Extract async def get() handler."""
@@ -171,7 +43,7 @@ class TestExtractHandlers:
         route_file.write_text("async def get(): return 'hello'")
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert "get" in result.handlers
         assert callable(result.handlers["get"])
@@ -183,7 +55,7 @@ class TestExtractHandlers:
         route_file.write_text("def get(): return 'hello'")
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert "get" in result.handlers
         assert callable(result.handlers["get"])
@@ -199,7 +71,7 @@ async def delete(): return 'delete'
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert len(result.handlers) == 3
         assert "get" in result.handlers
@@ -220,7 +92,7 @@ async def options(): pass
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         expected_methods = {"get", "post", "put", "patch", "delete", "head", "options"}
         assert set(result.handlers.keys()) == expected_methods
@@ -234,7 +106,7 @@ async def websocket(ws):
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert "websocket" in result.handlers
         assert callable(result.handlers["websocket"])
@@ -250,7 +122,7 @@ def websocket(ws):
         module = import_route_module(route_file, base_path=tmp_path)
 
         with pytest.raises(RouteValidationError, match="WebSocket handler must be async"):
-            extract_handlers(module, route_file)
+            _extract_handlers(module, route_file)
 
     def test_extracts_mix_of_sync_and_async_handlers(self, tmp_path: Path):
         """Extract mix of sync and async HTTP handlers."""
@@ -262,7 +134,7 @@ async def delete(): pass
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert len(result.handlers) == 3
         assert inspect.iscoroutinefunction(result.handlers["get"])
@@ -279,7 +151,7 @@ def __private(): return 'private'
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert "get" in result.handlers
         assert "_helper" not in result.handlers
@@ -291,7 +163,7 @@ def __private(): return 'private'
         route_file.write_text("async def get(): pass")
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert "__name__" not in result.handlers
         assert "__doc__" not in result.handlers
@@ -308,7 +180,7 @@ async def get(): pass
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert "MAX_ITEMS" not in result.handlers
         assert "API_VERSION" not in result.handlers
@@ -325,7 +197,7 @@ async def get(): pass
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         # Should only have get, not Path or Any
         assert list(result.handlers.keys()) == ["get"]
@@ -341,7 +213,7 @@ async def get(): pass
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert "config" not in result.handlers
         assert "data" not in result.handlers
@@ -358,7 +230,7 @@ def invalid_export(): pass
         module = import_route_module(route_file, base_path=tmp_path)
 
         with pytest.raises(RouteValidationError, match="Invalid export"):
-            extract_handlers(module, route_file)
+            _extract_handlers(module, route_file)
 
     def test_provides_helpful_error_for_invalid_exports(self, tmp_path: Path):
         """Error message suggests prefixing with underscore."""
@@ -371,7 +243,7 @@ def helper_function(): pass
         module = import_route_module(route_file, base_path=tmp_path)
 
         with pytest.raises(RouteValidationError, match="Prefix helper functions with underscore"):
-            extract_handlers(module, route_file)
+            _extract_handlers(module, route_file)
 
     def test_returns_empty_handlers_for_no_handlers(self, tmp_path: Path):
         """Return empty handlers dict when no handlers present."""
@@ -382,7 +254,7 @@ CONFIG = {}
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert result.handlers == {}
         assert isinstance(result.metadata, RouteMetadata)
@@ -396,7 +268,7 @@ async def get(): pass
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert result.metadata.tags == ["projects", "workspace"]
 
@@ -409,7 +281,7 @@ async def get(): pass
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert result.metadata.summary == "User management endpoints"
 
@@ -422,7 +294,7 @@ async def get(): pass
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert result.metadata.deprecated is True
 
@@ -438,7 +310,7 @@ async def get(): pass
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert result.metadata.tags == ["admin"]
         assert result.metadata.summary == "Admin operations"
@@ -450,7 +322,7 @@ async def get(): pass
         route_file.write_text("async def get(): pass")
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert result.metadata.tags is None
         assert result.metadata.summary is None
@@ -476,7 +348,7 @@ async def get():
         assert result.metadata.tags == ["test"]
 
     def test_passes_base_path_through(self, tmp_path: Path):
-        """Pass base_path parameter to import_route_module."""
+        """Pass base_path parameter through to the module loader."""
         subdir = tmp_path / "api"
         subdir.mkdir()
         route_file = subdir / "route.py"
@@ -550,13 +422,13 @@ class TestExtractedRouteDataclass:
 
 
 class TestRouteConfigDetection:
-    """Tests for RouteConfig object detection in extract_handlers."""
+    """Tests for RouteConfig object detection in _extract_handlers."""
 
     def test_detects_route_config_object(self, tmp_path: Path):
         """RouteConfig objects are detected and placed in handlers dict."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import Route
+from fastapi_filebased_routing.core.routes import Route
 
 class GET(Route):
     async def handler():
@@ -564,11 +436,11 @@ class GET(Route):
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert "get" in result.handlers
         # Import RouteConfig to check isinstance
-        from fastapi_filebased_routing.core.middleware import RouteConfig
+        from fastapi_filebased_routing.core.routes import RouteConfig
 
         assert isinstance(result.handlers["get"], RouteConfig)
 
@@ -576,7 +448,7 @@ class GET(Route):
         """RouteConfig with name in ALLOWED_HANDLERS is accepted."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import Route
+from fastapi_filebased_routing.core.routes import Route
 
 class POST(Route):
     async def handler():
@@ -588,7 +460,7 @@ class DELETE(Route):
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert "post" in result.handlers
         assert "delete" in result.handlers
@@ -598,7 +470,7 @@ class DELETE(Route):
         """RouteConfig with name not in ALLOWED_HANDLERS is rejected."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import Route
+from fastapi_filebased_routing.core.routes import Route
 
 class invalid_handler(Route):
     async def handler():
@@ -608,13 +480,13 @@ class invalid_handler(Route):
         module = import_route_module(route_file, base_path=tmp_path)
 
         with pytest.raises(RouteValidationError, match="Invalid export"):
-            extract_handlers(module, route_file)
+            _extract_handlers(module, route_file)
 
     def test_route_subclass_detected_before_constant_skip(self, tmp_path: Path):
         """All-caps verb names are detected as Route subclasses, not skipped as constants."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import Route, RouteConfig
+from fastapi_filebased_routing.core.routes import Route, RouteConfig
 
 class GET(Route):
     async def handler():
@@ -626,12 +498,12 @@ assert isinstance(GET._config, RouteConfig)
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         # "GET".isupper() is True, but it is detected as a Route subclass before
         # the uppercase-constant skip, and registered under its lowercased name.
         assert "get" in result.handlers
-        from fastapi_filebased_routing.core.middleware import RouteConfig
+        from fastapi_filebased_routing.core.routes import RouteConfig
 
         assert isinstance(result.handlers["get"], RouteConfig)
 
@@ -647,12 +519,12 @@ async def post():
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert "get" in result.handlers
         assert "post" in result.handlers
         # Should be plain callables, not RouteConfig
-        from fastapi_filebased_routing.core.middleware import RouteConfig
+        from fastapi_filebased_routing.core.routes import RouteConfig
 
         assert not isinstance(result.handlers["get"], RouteConfig)
         assert not isinstance(result.handlers["post"], RouteConfig)
@@ -662,7 +534,7 @@ async def post():
         """Mix of RouteConfig and plain functions extracted correctly."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import Route
+from fastapi_filebased_routing.core.routes import Route
 
 async def get():
     return {"plain": True}
@@ -676,14 +548,14 @@ async def delete():
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert len(result.handlers) == 3
         assert "get" in result.handlers
         assert "post" in result.handlers
         assert "delete" in result.handlers
 
-        from fastapi_filebased_routing.core.middleware import RouteConfig
+        from fastapi_filebased_routing.core.routes import RouteConfig
 
         # get and delete are plain functions
         assert not isinstance(result.handlers["get"], RouteConfig)
@@ -695,7 +567,7 @@ async def delete():
         """RouteConfig preserves the handler name (e.g., 'get')."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import Route
+from fastapi_filebased_routing.core.routes import Route
 
 class GET(Route):
     async def handler():
@@ -703,11 +575,11 @@ class GET(Route):
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         # The key in handlers dict should be "get" (lowercase)
         assert "get" in result.handlers
-        from fastapi_filebased_routing.core.middleware import RouteConfig
+        from fastapi_filebased_routing.core.routes import RouteConfig
 
         config = result.handlers["get"]
         assert isinstance(config, RouteConfig)
@@ -718,7 +590,7 @@ class GET(Route):
         """class WEBSOCKET(Route): with an async handler is accepted."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import Route
+from fastapi_filebased_routing.core.routes import Route
 
 class WEBSOCKET(Route):
     async def handler(ws):
@@ -726,7 +598,7 @@ class WEBSOCKET(Route):
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert "websocket" in result.handlers
 
@@ -734,7 +606,7 @@ class WEBSOCKET(Route):
         """class WEBSOCKET(Route): with a sync handler raises RouteValidationError."""
         route_file = tmp_path / "route.py"
         route_file.write_text("""
-from fastapi_filebased_routing.core.middleware import Route
+from fastapi_filebased_routing.core.routes import Route
 
 class WEBSOCKET(Route):
     @staticmethod
@@ -745,88 +617,7 @@ class WEBSOCKET(Route):
         module = import_route_module(route_file, base_path=tmp_path)
 
         with pytest.raises(RouteValidationError, match="WebSocket handler must be async"):
-            extract_handlers(module, route_file)
-
-
-class TestSecurityValidation:
-    """Tests for security validations in the importer."""
-
-    def test_rejects_path_traversal_in_middle_of_path(self, tmp_path: Path):
-        """Reject .. anywhere in the path components."""
-        malicious = tmp_path / "api" / ".." / ".." / "etc" / "route.py"
-
-        with pytest.raises(RouteValidationError, match="Path traversal"):
-            import_route_module(malicious, base_path=tmp_path)
-
-    def test_accepts_dotdot_in_filename_not_path_component(self, tmp_path: Path):
-        """Accept filenames containing .. if not a path component."""
-        # This test verifies we check path.parts, not just string matching
-        # In practice, route.py is enforced, but this tests the logic
-        route_file = tmp_path / "route.py"
-        route_file.write_text("async def get(): pass")
-
-        # Should work fine - no .. in path.parts
-        module = import_route_module(route_file, base_path=tmp_path)
-        assert hasattr(module, "get")
-
-    def test_validates_parameter_names_as_python_identifiers(self, tmp_path: Path):
-        """Parameter names must be valid Python identifiers."""
-        invalid_cases = [
-            "[123param]",  # starts with digit
-            "[param-name]",  # contains hyphen
-            "[param.name]",  # contains dot
-            "[param name]",  # contains space
-        ]
-
-        for invalid_name in invalid_cases:
-            invalid_dir = tmp_path / invalid_name
-            invalid_dir.mkdir(exist_ok=True)
-            route_file = invalid_dir / "route.py"
-            route_file.write_text("async def get(): pass")
-
-            with pytest.raises(RouteValidationError, match="Invalid parameter name"):
-                import_route_module(route_file, base_path=tmp_path)
-
-            # Clean up for next iteration
-            route_file.unlink()
-            invalid_dir.rmdir()
-
-    def test_accepts_valid_parameter_names(self, tmp_path: Path):
-        """Accept valid Python identifier parameter names."""
-        valid_cases = ["[user_id]", "[_private]", "[id123]", "[project]"]
-
-        for i, valid_name in enumerate(valid_cases):
-            # Use unique tmp_path subdirectory for each case to avoid conflicts
-            test_dir = tmp_path / f"test_{i}"
-            test_dir.mkdir()
-            valid_dir = test_dir / valid_name
-            valid_dir.mkdir()
-            route_file = valid_dir / "route.py"
-            route_file.write_text("async def get(): pass")
-
-            # Should not raise
-            module = import_route_module(route_file, base_path=test_dir)
-            assert hasattr(module, "get")
-
-    def test_validates_optional_parameter_names(self, tmp_path: Path):
-        """Validate parameter names in [[optional]] syntax."""
-        invalid_dir = tmp_path / "[[in-valid]]"
-        invalid_dir.mkdir()
-        route_file = invalid_dir / "route.py"
-        route_file.write_text("async def get(): pass")
-
-        with pytest.raises(RouteValidationError, match="Invalid parameter name"):
-            import_route_module(route_file, base_path=tmp_path)
-
-    def test_validates_catch_all_parameter_names(self, tmp_path: Path):
-        """Validate parameter names in [...catchall] syntax."""
-        invalid_dir = tmp_path / "[...in-valid]"
-        invalid_dir.mkdir()
-        route_file = invalid_dir / "route.py"
-        route_file.write_text("async def get(): pass")
-
-        with pytest.raises(RouteValidationError, match="Invalid parameter name"):
-            import_route_module(route_file, base_path=tmp_path)
+            _extract_handlers(module, route_file)
 
 
 class TestFileLevelMiddleware:
@@ -849,7 +640,7 @@ async def get():
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert len(result.file_middleware) == 2
         assert result.file_middleware[0].__name__ == "mw1"
@@ -869,7 +660,7 @@ async def get():
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert len(result.file_middleware) == 1
         assert result.file_middleware[0].__name__ == "auth_middleware"
@@ -881,7 +672,7 @@ async def get():
         route_file.write_text("async def get(): pass")
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert result.file_middleware == ()
         assert isinstance(result.file_middleware, tuple)
@@ -897,7 +688,7 @@ async def get():
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert result.file_middleware == ()
         assert isinstance(result.file_middleware, tuple)
@@ -920,7 +711,7 @@ async def get():
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         # Middleware extracted correctly
         assert len(result.file_middleware) == 1
@@ -940,7 +731,7 @@ async def get():
         route_file.write_text("async def get(): pass")
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         # Field exists with default empty tuple
         assert hasattr(result, "file_middleware")
@@ -948,9 +739,7 @@ async def get():
 
     def test_backward_compat_extracted_route_without_file_middleware(self, tmp_path: Path):
         """ExtractedRoute can be created without file_middleware (backward compat)."""
-        from fastapi_filebased_routing.core.importer import RouteMetadata
-
-        # Old code should still work — file_middleware has a default
+        # file_middleware has a default — old construction still works
         route = ExtractedRoute(handlers={"get": lambda: "ok"}, metadata=RouteMetadata())
 
         assert hasattr(route, "file_middleware")
@@ -972,7 +761,7 @@ async def get():
         module = import_route_module(route_file, base_path=tmp_path)
 
         with pytest.raises(RouteValidationError, match="must be async"):
-            extract_handlers(module, route_file)
+            _extract_handlers(module, route_file)
 
     def test_rejects_non_callable_file_level_middleware(self, tmp_path: Path):
         """Non-callable file-level middleware raises RouteValidationError."""
@@ -987,7 +776,7 @@ async def get():
         module = import_route_module(route_file, base_path=tmp_path)
 
         with pytest.raises(RouteValidationError, match="Non-callable middleware"):
-            extract_handlers(module, route_file)
+            _extract_handlers(module, route_file)
 
     def test_rejects_sync_single_callable_file_middleware(self, tmp_path: Path):
         """Single sync callable as file middleware raises RouteValidationError."""
@@ -1005,7 +794,7 @@ async def get():
         module = import_route_module(route_file, base_path=tmp_path)
 
         with pytest.raises(RouteValidationError, match="must be async"):
-            extract_handlers(module, route_file)
+            _extract_handlers(module, route_file)
 
     def test_middleware_as_tuple_is_preserved(self, tmp_path: Path):
         """middleware = (fn1, fn2) as tuple is preserved."""
@@ -1024,98 +813,7 @@ async def get():
 """)
 
         module = import_route_module(route_file, base_path=tmp_path)
-        result = extract_handlers(module, route_file)
+        result = _extract_handlers(module, route_file)
 
         assert len(result.file_middleware) == 2
         assert isinstance(result.file_middleware, tuple)
-
-
-class TestSymlinkAliasDetection:
-    """Tests for symlink alias detection via file identity cache."""
-
-    def _cleanup_modules(self, tmp_path: Path) -> None:
-        """Remove any sys.modules entries created during test."""
-        to_remove = [
-            name
-            for name in sys.modules
-            if "route" in name and str(tmp_path) in str(getattr(sys.modules[name], "__file__", ""))
-        ]
-        for name in to_remove:
-            del sys.modules[name]
-
-    def test_symlink_returns_same_module(self, tmp_path: Path) -> None:
-        """Importing via a symlink should return the same module as the original."""
-        # Create original route.py
-        original_dir = tmp_path / "original"
-        original_dir.mkdir()
-        route_file = original_dir / "route.py"
-        route_file.write_text("async def get(): return 'hello'")
-
-        # Create symlink to route.py in a different directory
-        symlink_dir = tmp_path / "symlink"
-        symlink_dir.mkdir()
-        symlink_file = symlink_dir / "route.py"
-        os.symlink(route_file, symlink_file)
-
-        try:
-            # Import via original path
-            module1 = import_route_module(route_file, base_path=tmp_path)
-
-            # Import via symlink path
-            module2 = import_route_module(symlink_file, base_path=tmp_path)
-
-            # Should be the SAME module object (not a duplicate)
-            assert module1 is module2
-        finally:
-            self._cleanup_modules(tmp_path)
-            # Clean up file identity cache entries for this test
-            stat = route_file.stat()
-            file_id = (stat.st_dev, stat.st_ino)
-            _file_identity_cache.pop(file_id, None)
-
-    def test_different_files_get_different_modules(self, tmp_path: Path) -> None:
-        """Different files (not symlinks) should produce different modules."""
-        # Create two distinct route.py files
-        dir1 = tmp_path / "dir1"
-        dir1.mkdir()
-        route1 = dir1 / "route.py"
-        route1.write_text("async def get(): return 'hello1'")
-
-        dir2 = tmp_path / "dir2"
-        dir2.mkdir()
-        route2 = dir2 / "route.py"
-        route2.write_text("async def get(): return 'hello2'")
-
-        try:
-            module1 = import_route_module(route1, base_path=tmp_path)
-            module2 = import_route_module(route2, base_path=tmp_path)
-
-            # Should be DIFFERENT module objects
-            assert module1 is not module2
-        finally:
-            self._cleanup_modules(tmp_path)
-            # Clean up file identity cache entries for this test
-            for route_file in (route1, route2):
-                stat = route_file.stat()
-                file_id = (stat.st_dev, stat.st_ino)
-                _file_identity_cache.pop(file_id, None)
-
-    def test_file_identity_cache_populated_after_import(self, tmp_path: Path) -> None:
-        """File identity cache should have entry after importing a route."""
-        route_file = tmp_path / "route.py"
-        route_file.write_text("async def get(): return 'hello'")
-
-        stat = route_file.stat()
-        file_id = (stat.st_dev, stat.st_ino)
-
-        try:
-            # Cache should NOT have this file yet
-            assert file_id not in _file_identity_cache
-
-            import_route_module(route_file, base_path=tmp_path)
-
-            # Cache SHOULD have this file now
-            assert file_id in _file_identity_cache
-        finally:
-            self._cleanup_modules(tmp_path)
-            _file_identity_cache.pop(file_id, None)

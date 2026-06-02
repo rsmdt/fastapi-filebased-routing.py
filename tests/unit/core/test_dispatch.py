@@ -1,4 +1,4 @@
-"""Tests for dispatch() class-based middleware adapter."""
+"""Tests for the class-based middleware dispatch adapter."""
 
 import asyncio
 from typing import Any
@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from fastapi_filebased_routing.core.middleware import _noop_app, dispatch
+from fastapi_filebased_routing.core.dispatch import _noop_app, dispatch
 
 
 class _FakeMiddleware:

@@ -1,8 +1,8 @@
-"""Tests for the core parser module."""
+"""Tests for the core paths module (pipeline stage 1: path-segment grammar)."""
 
 import pytest
 
-from fastapi_filebased_routing.core.parser import (
+from fastapi_filebased_routing.core.paths import (
     PathSegment,
     SegmentType,
     parse_path,

@@ -1,11 +1,11 @@
-"""Tests for core scanner module."""
+"""Tests for the core discovery module (pipeline stage 2: filesystem discovery)."""
 
 from pathlib import Path
 
 import pytest
 
-from fastapi_filebased_routing.core.parser import SegmentType
-from fastapi_filebased_routing.core.scanner import RouteDefinition, scan_routes
+from fastapi_filebased_routing.core.discovery import RouteDefinition, scan_routes
+from fastapi_filebased_routing.core.paths import SegmentType
 from fastapi_filebased_routing.exceptions import RouteDiscoveryError
 
 
@@ -14,7 +14,7 @@ class TestRouteDefinition:
 
     def test_route_definition_frozen(self):
         """RouteDefinition instances are immutable."""
-        from fastapi_filebased_routing.core.parser import PathSegment
+        from fastapi_filebased_routing.core.paths import PathSegment
 
         rd = RouteDefinition(
             path="/users",
@@ -29,7 +29,7 @@ class TestRouteDefinition:
 
     def test_has_optional_params_true(self):
         """has_optional_params returns True when optional segments present."""
-        from fastapi_filebased_routing.core.parser import PathSegment
+        from fastapi_filebased_routing.core.paths import PathSegment
 
         rd = RouteDefinition(
             path="/api/{version}/users",
@@ -49,7 +49,7 @@ class TestRouteDefinition:
 
     def test_has_optional_params_false(self):
         """has_optional_params returns False when no optional segments."""
-        from fastapi_filebased_routing.core.parser import PathSegment
+        from fastapi_filebased_routing.core.paths import PathSegment
 
         rd = RouteDefinition(
             path="/users/{id}",
@@ -66,7 +66,7 @@ class TestRouteDefinition:
 
     def test_parameters_property(self):
         """parameters property returns only parameter segments."""
-        from fastapi_filebased_routing.core.parser import PathSegment
+        from fastapi_filebased_routing.core.paths import PathSegment
 
         rd = RouteDefinition(
             path="/workspaces/{workspace_id}/projects/{project_id}",
@@ -388,9 +388,9 @@ class TestMiddlewareDiscovery:
         middleware_file = tmp_path / "_middleware.py"
         middleware_file.write_text("middleware = []")
 
-        from fastapi_filebased_routing.core.scanner import scan_middleware
+        from fastapi_filebased_routing.core.discovery import scan_directory_middleware
 
-        files = scan_middleware(tmp_path)
+        files = scan_directory_middleware(tmp_path)
 
         assert len(files) == 1
         assert files[0].file_path == middleware_file
@@ -404,9 +404,9 @@ class TestMiddlewareDiscovery:
         (tmp_path / "api" / "v1").mkdir()
         (tmp_path / "api" / "v1" / "_middleware.py").write_text("middleware = []")
 
-        from fastapi_filebased_routing.core.scanner import scan_middleware
+        from fastapi_filebased_routing.core.discovery import scan_directory_middleware
 
-        files = scan_middleware(tmp_path)
+        files = scan_directory_middleware(tmp_path)
 
         assert len(files) == 2
         # Should be sorted by depth (shallowest first)
@@ -422,9 +422,9 @@ class TestMiddlewareDiscovery:
         (tmp_path / "api" / "v1").mkdir()
         (tmp_path / "api" / "v1" / "_middleware.py").write_text("middleware = []")
 
-        from fastapi_filebased_routing.core.scanner import scan_middleware
+        from fastapi_filebased_routing.core.discovery import scan_directory_middleware
 
-        files = scan_middleware(tmp_path)
+        files = scan_directory_middleware(tmp_path)
 
         assert len(files) == 3
         assert files[0].depth == 0  # root
@@ -445,9 +445,9 @@ class TestMiddlewareDiscovery:
         (tmp_path / "api").mkdir()
         (tmp_path / "api" / "_middleware.py").write_text("middleware = []")
 
-        from fastapi_filebased_routing.core.scanner import scan_middleware
+        from fastapi_filebased_routing.core.discovery import scan_directory_middleware
 
-        files = scan_middleware(tmp_path)
+        files = scan_directory_middleware(tmp_path)
 
         assert len(files) == 1
         assert files[0].directory == tmp_path / "api"
@@ -462,9 +462,9 @@ class TestMiddlewareDiscovery:
         (tmp_path / "api").mkdir()
         (tmp_path / "api" / "_middleware.py").write_text("middleware = []")
 
-        from fastapi_filebased_routing.core.scanner import scan_middleware
+        from fastapi_filebased_routing.core.discovery import scan_directory_middleware
 
-        files = scan_middleware(tmp_path)
+        files = scan_directory_middleware(tmp_path)
 
         assert len(files) == 1
         assert files[0].directory == tmp_path / "api"
@@ -474,13 +474,13 @@ class TestMiddlewareDiscovery:
         absolute path leading to base must not cause middleware files to
         be dropped.
         """
-        from fastapi_filebased_routing.core.scanner import scan_middleware
+        from fastapi_filebased_routing.core.discovery import scan_directory_middleware
 
         nested = tmp_path / ".worktree" / "main"
         (nested / "api").mkdir(parents=True)
         (nested / "api" / "_middleware.py").write_text("middleware = []")
 
-        files = scan_middleware(nested)
+        files = scan_directory_middleware(nested)
 
         assert len(files) == 1
         assert files[0].directory == nested / "api"
@@ -503,9 +503,9 @@ class TestMiddlewareDiscovery:
         (base_dir / "api").mkdir()
         (base_dir / "api" / "_middleware.py").write_text("middleware = []")
 
-        from fastapi_filebased_routing.core.scanner import scan_middleware
+        from fastapi_filebased_routing.core.discovery import scan_directory_middleware
 
-        files = scan_middleware(base_dir)
+        files = scan_directory_middleware(base_dir)
 
         # Should only find the valid middleware, not the symlinked one
         assert len(files) == 1
@@ -516,9 +516,9 @@ class TestMiddlewareDiscovery:
         (tmp_path / "api").mkdir()
         (tmp_path / "api" / "users").mkdir()
 
-        from fastapi_filebased_routing.core.scanner import scan_middleware
+        from fastapi_filebased_routing.core.discovery import scan_directory_middleware
 
-        files = scan_middleware(tmp_path)
+        files = scan_directory_middleware(tmp_path)
         assert files == []
 
     def test_middleware_inside_route_groups(self, tmp_path: Path):
@@ -527,9 +527,9 @@ class TestMiddlewareDiscovery:
         admin_group.mkdir()
         (admin_group / "_middleware.py").write_text("middleware = []")
 
-        from fastapi_filebased_routing.core.scanner import scan_middleware
+        from fastapi_filebased_routing.core.discovery import scan_directory_middleware
 
-        files = scan_middleware(tmp_path)
+        files = scan_directory_middleware(tmp_path)
 
         assert len(files) == 1
         assert files[0].directory == admin_group
@@ -539,26 +539,26 @@ class TestMiddlewareDiscovery:
         """scan_middleware accepts string paths."""
         (tmp_path / "_middleware.py").write_text("middleware = []")
 
-        from fastapi_filebased_routing.core.scanner import scan_middleware
+        from fastapi_filebased_routing.core.discovery import scan_directory_middleware
 
-        files = scan_middleware(str(tmp_path))
+        files = scan_directory_middleware(str(tmp_path))
 
         assert len(files) == 1
         assert files[0].directory == tmp_path
 
     def test_raises_error_for_nonexistent_path_middleware(self, tmp_path: Path):
         """Nonexistent base path raises RouteDiscoveryError."""
-        from fastapi_filebased_routing.core.scanner import scan_middleware
+        from fastapi_filebased_routing.core.discovery import scan_directory_middleware
 
         nonexistent = tmp_path / "does_not_exist"
         with pytest.raises(RouteDiscoveryError, match="does not exist"):
-            scan_middleware(nonexistent)
+            scan_directory_middleware(nonexistent)
 
     def test_raises_error_for_file_not_directory_middleware(self, tmp_path: Path):
         """File path (not directory) raises RouteDiscoveryError."""
-        from fastapi_filebased_routing.core.scanner import scan_middleware
+        from fastapi_filebased_routing.core.discovery import scan_directory_middleware
 
         file_path = tmp_path / "file.txt"
         file_path.write_text("not a directory")
         with pytest.raises(RouteDiscoveryError, match="not a directory"):
-            scan_middleware(file_path)
+            scan_directory_middleware(file_path)

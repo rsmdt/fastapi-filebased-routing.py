@@ -1,15 +1,15 @@
-"""FastAPI file-based routing plugin."""
+"""FastAPI file-based routing plugin.
 
-# Primary API — the main entry point
-# Core types — for advanced users and type checking
-from fastapi_filebased_routing.core.importer import ExtractedRoute, RouteMetadata
+Public package facade. This module is the only sanctioned import surface; deep
+paths (``core.*``, ``adapter.*``) are internal and unstable.
+"""
 
-# Middleware API (NEW in v0.2.0)
-from fastapi_filebased_routing.core.middleware import Route, RouteConfig, dispatch
-from fastapi_filebased_routing.core.parser import PathSegment, SegmentType
-from fastapi_filebased_routing.core.scanner import RouteDefinition
-
-# Exceptions — for error handling
+from fastapi_filebased_routing.adapter.router_factory import create_router_from_path
+from fastapi_filebased_routing.core.discovery import RouteDefinition
+from fastapi_filebased_routing.core.dispatch import dispatch
+from fastapi_filebased_routing.core.handlers import ExtractedRoute, RouteMetadata
+from fastapi_filebased_routing.core.paths import PathSegment, SegmentType
+from fastapi_filebased_routing.core.routes import Route, RouteConfig
 from fastapi_filebased_routing.exceptions import (
     DuplicateRouteError,
     FileBasedRoutingError,
@@ -19,12 +19,11 @@ from fastapi_filebased_routing.exceptions import (
     RouteFilterError,
     RouteValidationError,
 )
-from fastapi_filebased_routing.fastapi.router import create_router_from_path
 
 __all__ = [
     # Primary API
     "create_router_from_path",
-    # Middleware API (NEW in v0.2.0)
+    # Middleware API
     "dispatch",
     "Route",
     "RouteConfig",

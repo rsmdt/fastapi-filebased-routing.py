@@ -1,14 +1,16 @@
-"""Directory scanner for file-based routing.
+"""Pipeline stage 2: filesystem discovery for file-based routing.
 
-Walks the directory tree to discover route.py files and extract
-route definitions with their paths.
+Walks the directory tree to find ``route.py`` and ``_middleware.py`` files,
+applies security filtering (dotfiles, ``__pycache__``, symlink-escape), parses
+route directories into RouteDefinitions (including 2^n optional-variant
+expansion), and records directory-middleware locations sorted by depth.
 """
 
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from fastapi_filebased_routing.core.parser import (
+from fastapi_filebased_routing.core.paths import (
     PathSegment,
     SegmentType,
     parse_path,
@@ -51,8 +53,10 @@ class RouteDefinition:
 
 
 @dataclass(frozen=True)
-class MiddlewareFile:
+class DirectoryMiddleware:
     """A discovered _middleware.py file with its directory depth.
+
+    Directory middleware cascades to subdirectories (parent before child).
 
     Attributes:
         file_path: Absolute path to the _middleware.py file.
@@ -228,7 +232,7 @@ def _generate_route_variants(
     return variants
 
 
-def scan_middleware(base_path: Path | str) -> list[MiddlewareFile]:
+def scan_directory_middleware(base_path: Path | str) -> list[DirectoryMiddleware]:
     """Scan a directory tree for _middleware.py files.
 
     Walks the directory tree recursively, finds all _middleware.py files,
@@ -238,18 +242,18 @@ def scan_middleware(base_path: Path | str) -> list[MiddlewareFile]:
         base_path: Root directory to scan for _middleware.py files.
 
     Returns:
-        List of MiddlewareFile objects, sorted by depth (shallowest first).
+        List of DirectoryMiddleware objects, sorted by depth (shallowest first).
         Empty list if no _middleware.py files are found.
 
     Raises:
         RouteDiscoveryError: If base_path doesn't exist or isn't a directory.
 
     Examples:
-        files = scan_middleware("app")
+        files = scan_directory_middleware("app")
         for mw_file in files:
             print(f"{mw_file.depth}: {mw_file.file_path}")
     """
-    middleware_files: list[MiddlewareFile] = []
+    directory_middleware: list[DirectoryMiddleware] = []
 
     for mw_file, base in _scan_directory(base_path, "_middleware.py"):
         directory = mw_file.parent
@@ -259,12 +263,12 @@ def scan_middleware(base_path: Path | str) -> list[MiddlewareFile]:
         except ValueError:
             continue
 
-        middleware_files.append(
-            MiddlewareFile(
+        directory_middleware.append(
+            DirectoryMiddleware(
                 file_path=mw_file,
                 directory=directory,
                 depth=depth,
             )
         )
 
-    return sorted(middleware_files, key=lambda mf: mf.depth)
+    return sorted(directory_middleware, key=lambda mf: mf.depth)

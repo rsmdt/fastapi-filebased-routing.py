@@ -1,14 +1,15 @@
-"""Route filtering for include/exclude deployment topologies.
+"""Pipeline stage 3: include/exclude route selection for deployment topologies.
 
-Filters routes and middleware files based on glob or segment-level
-patterns, ensuring excluded code is never imported.
+Validates filter exclusivity, filters RouteDefinitions by glob-or-bare-segment
+match, computes the active-directory set, and prunes directory middleware to
+surviving ancestor directories. Excluded code is never imported.
 """
 
 import fnmatch
 from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 
-from fastapi_filebased_routing.core.scanner import MiddlewareFile, RouteDefinition
+from fastapi_filebased_routing.core.discovery import DirectoryMiddleware, RouteDefinition
 from fastapi_filebased_routing.exceptions import RouteFilterError
 
 _GLOB_CHARS = frozenset("*?[")
@@ -81,8 +82,8 @@ def compute_active_directories(
 ) -> set[Path]:
     """Compute the set of directories that are ancestors of surviving routes.
 
-    This ensures parent middleware files (e.g., root _middleware.py) still
-    apply to included child routes.
+    This ensures parent directory middleware (e.g., root _middleware.py) still
+    applies to included child routes.
 
     Args:
         routes: Filtered list of route definitions.
@@ -110,21 +111,21 @@ def compute_active_directories(
     return active
 
 
-def filter_middleware_files(
-    middleware_files: list[MiddlewareFile],
+def filter_directory_middleware(
+    directory_middleware: list[DirectoryMiddleware],
     active_directories: set[Path],
-) -> list[MiddlewareFile]:
-    """Filter middleware files to only those in active directories.
+) -> list[DirectoryMiddleware]:
+    """Filter directory middleware to only those in active directories.
 
     Args:
-        middleware_files: All discovered middleware files.
+        directory_middleware: All discovered directory middleware.
         active_directories: Set of directories that are ancestors
             of surviving routes.
 
     Returns:
-        Filtered list of middleware files.
+        Filtered list of directory middleware.
     """
-    return [mw for mw in middleware_files if mw.directory in active_directories]
+    return [mw for mw in directory_middleware if mw.directory in active_directories]
 
 
 def _relative_directory(file_path: Path, base_path: Path) -> str:

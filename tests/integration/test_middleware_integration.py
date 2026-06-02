@@ -236,7 +236,7 @@ class TestHandlerLevelMiddleware:
         route_dir = tmp_path / "resources"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            "from fastapi_filebased_routing.core.middleware import Route\n"
+            "from fastapi_filebased_routing import Route\n"
             "\n"
             "async def _handler_mw(request, call_next):\n"
             "    response = await call_next(request)\n"
@@ -273,7 +273,7 @@ class TestHandlerLevelMiddleware:
         route_dir = tmp_path / "items"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            "from fastapi_filebased_routing.core.middleware import Route\n"
+            "from fastapi_filebased_routing import Route\n"
             "\n"
             "async def _file_mw(request, call_next):\n"
             "    response = await call_next(request)\n"
@@ -341,7 +341,7 @@ class TestFullExecutionOrder:
         users_dir = api_dir / "users"
         users_dir.mkdir()
         (users_dir / "route.py").write_text(
-            "from fastapi_filebased_routing.core.middleware import Route\n"
+            "from fastapi_filebased_routing import Route\n"
             "\n"
             "async def _file_mw(request, call_next):\n"
             "    response = await call_next(request)\n"
@@ -467,7 +467,7 @@ class TestMixedHandlerTypes:
         route_dir = tmp_path / "mixed"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            "from fastapi_filebased_routing.core.middleware import Route\n"
+            "from fastapi_filebased_routing import Route\n"
             "\n"
             "async def _handler_mw(request, call_next):\n"
             "    response = await call_next(request)\n"
@@ -736,7 +736,7 @@ class TestMultipleMiddlewareInSameLevel:
         route_dir = tmp_path / "resources"
         route_dir.mkdir()
         (route_dir / "route.py").write_text(
-            "from fastapi_filebased_routing.core.middleware import Route\n"
+            "from fastapi_filebased_routing import Route\n"
             "\n"
             "async def _mw1(request, call_next):\n"
             "    response = await call_next(request)\n"
@@ -844,7 +844,7 @@ class TestComprehensiveIntegration:
         users_dir.mkdir()
         (users_dir / "route.py").write_text(
             "from fastapi import Request\n"
-            "from fastapi_filebased_routing.core.middleware import Route\n"
+            "from fastapi_filebased_routing import Route\n"
             "\n"
             "async def rate_limit(request, call_next):\n"
             "    response = await call_next(request)\n"

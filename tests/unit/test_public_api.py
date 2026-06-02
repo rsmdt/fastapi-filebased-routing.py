@@ -125,18 +125,18 @@ def test_version_is_2_0_0():
 
 
 def test_route_import_path():
-    """Route can be imported from root package (not just core.middleware)."""
+    """Route can be imported from root package (the sanctioned import surface)."""
     from fastapi_filebased_routing import Route
-    from fastapi_filebased_routing.core.middleware import Route as CoreRoute
+    from fastapi_filebased_routing.core.routes import Route as CoreRoute
 
     # Should be the same class
     assert Route is CoreRoute
 
 
 def test_route_config_import_path():
-    """RouteConfig can be imported from root package (not just core.middleware)."""
+    """RouteConfig can be imported from root package (the sanctioned import surface)."""
     from fastapi_filebased_routing import RouteConfig
-    from fastapi_filebased_routing.core.middleware import RouteConfig as CoreRouteConfig
+    from fastapi_filebased_routing.core.routes import RouteConfig as CoreRouteConfig
 
     # Should be the same class
     assert RouteConfig is CoreRouteConfig
